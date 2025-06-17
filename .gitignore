@@ -1,0 +1,11 @@
+.buildozer
+app/.buildozer
+.idea
+.vscode
+.DS_Store
+.env
+.venv
+.pytest_cache
+.coverage
+.coverage.*
+.coverage.*
