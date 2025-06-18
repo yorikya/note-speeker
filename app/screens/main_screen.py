@@ -9,7 +9,10 @@ from kivy.clock import Clock
 import platform
 import unicodedata
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+from kivy.uix.popup import Popup
+import os
+from bidi.algorithm import get_display
 
 
 
@@ -137,7 +140,7 @@ class MainScreen(Screen):
         
         # Record button with modern styling
         self.record_btn = Button(
-            text='Start Recording',  # Remove emoji
+            text='Start',  # Changed from 'start'
             font_size='16sp',
             background_color=(0.2, 0.8, 0.3, 1),  # Modern green
             color=(1, 1, 1, 1),
@@ -175,63 +178,34 @@ class MainScreen(Screen):
     
     def create_notes_card(self):
         """Create notes display card with modern styling"""
-        card = BoxLayout(
-            orientation='vertical',
-            padding=dp(20),
-            spacing=dp(10)
-        )
-        
-        # Add card background
-        with card.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle
-            Color(0.2, 0.25, 0.35, 0.9)  # Semi-transparent dark card
-            card.bg = RoundedRectangle(size=card.size, pos=card.pos, radius=[15])
-            card.bind(size=lambda instance, value: setattr(card.bg, 'size', value))
-            card.bind(pos=lambda instance, value: setattr(card.bg, 'pos', value))
-        
-        # Notes title
-        notes_title = Label(
-            text='Your Notes',
-            size_hint_y=None,
-            height=dp(40),
+        # Rename to 'Chat' and use a BoxLayout for chat messages
+        chat_title = Label(
+            text='Chat',
             font_size='20sp',
             color=(1, 1, 1, 1),
             bold=True,
             halign='left'
         )
-        notes_title.text_size = (None, None)
-        
-        # Scrollable notes area with simple Label
+        chat_title.text_size = (None, None)
+
         scroll = ScrollView()
-        
-        # Use TextInput widget which handles Unicode better
-        self.notes_display = TextInput(
-            text='',
-            font_size='16sp',
-            foreground_color=(1, 1, 1, 1),
-            background_color=(0, 0, 0, 0),  # Transparent background
-            multiline=True,
-            readonly=True,
-            cursor_color=(0, 0, 0, 0)  # Hide cursor
-        )
-        
-        scroll.add_widget(self.notes_display)
-        
-        # Keep the TextInput for compatibility and backup storage
+        self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None)
+        self.chat_history.bind(minimum_height=self.chat_history.setter('height'))
+        scroll.add_widget(self.chat_history)
+
+        # Keep the TextInput for compatibility and backup storage (hidden)
         self.notes_text = TextInput(
             text='',
             multiline=True,
             opacity=0,  # Hidden
             readonly=True
         )
-        
-        # For compatibility
-        self.notes_label = self.notes_display
-        
-        card.add_widget(notes_title)
+
+        card = BoxLayout(orientation='vertical')
+        card.add_widget(chat_title)
         card.add_widget(scroll)
         return card
-    
+
     def get_app_title(self):
         """Get the app title with current language"""
         current_lang = self.app_instance.config_service.get_language()
@@ -272,7 +246,7 @@ class MainScreen(Screen):
     def stop_recording(self, instance):
         """Stop recording with modern UI updates"""
         self.status_label.text = 'Ready to record'  # Remove emoji
-        self.record_btn.text = 'Start Recording'  # Remove emoji
+        self.record_btn.text = 'Start'  # Changed from 'start'
         self.record_btn.background_color = (0.2, 0.8, 0.3, 1)  # Green when ready
         self.stop_btn.disabled = True
         
@@ -282,122 +256,141 @@ class MainScreen(Screen):
     def fix_hebrew_display_direction(self, text):
         """Fix Hebrew text direction for display in UI widgets"""
         current_lang = self.app_instance.config_service.get_language()
-        
+        print(f"[DEBUG] fix_hebrew_display_direction: input={text}")
         if current_lang != 'he-IL':
-            return text  # No changes for non-Hebrew
-            
-        # Check if text contains Hebrew characters
-        has_hebrew = any('\u0590' <= char <= '\u05FF' for char in text)
-        
-        if not has_hebrew:
-            return text  # No Hebrew characters found
-        
-        # Split into lines and process each line
-        lines = text.split('\n')
-        fixed_lines = []
-        
-        for line in lines:
-            if not line.strip():
-                fixed_lines.append(line)  # Keep empty lines as-is
-                continue
-                
-            # Check if line starts with timestamp [HH:MM]
-            if line.startswith('[') and ']:' in line:
-                # Split timestamp and content
-                parts = line.split('] ', 1)
-                if len(parts) == 2:
-                    timestamp = parts[0] + '] '
-                    content = parts[1]
-                    
-                    # Reverse only the Hebrew content part
-                    if any('\u0590' <= char <= '\u05FF' for char in content):
-                        # Reverse word order and characters within each word for Hebrew text
-                        words = content.split()
-                        reversed_words = []
-                        for word in reversed(words):
-                            # Check if word contains Hebrew characters
-                            if any('\u0590' <= char <= '\u05FF' for char in word):
-                                # Reverse characters within Hebrew words
-                                reversed_words.append(word[::-1])
-                            else:
-                                # Keep non-Hebrew words as-is (numbers, punctuation, etc.)
-                                reversed_words.append(word)
-                        reversed_content = ' '.join(reversed_words)
-                        fixed_line = timestamp + reversed_content
-                    else:
-                        fixed_line = line  # Keep non-Hebrew content as-is
-                else:
-                    fixed_line = line
-            else:
-                # Line without timestamp - reverse if Hebrew
-                if any('\u0590' <= char <= '\u05FF' for char in line):
-                    words = line.split()
-                    reversed_words = []
-                    for word in reversed(words):
-                        # Check if word contains Hebrew characters
-                        if any('\u0590' <= char <= '\u05FF' for char in word):
-                            # Reverse characters within Hebrew words
-                            reversed_words.append(word[::-1])
-                        else:
-                            # Keep non-Hebrew words as-is (numbers, punctuation, etc.)
-                            reversed_words.append(word)
-                    fixed_line = ' '.join(reversed_words)
-                else:
-                    fixed_line = line
-                    
-            fixed_lines.append(fixed_line)
-        
-        return '\n'.join(fixed_lines)
+            return text
+        result = get_display(text)
+        print(f"[DEBUG] fix_hebrew_display_direction: output={result}")
+        return result
+
+    def show_yes_no_dialog(self, note_text, result):
+        layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        label = Label(text="I didn't understand. Would you like to create a note with this text?")
+        btn_layout = BoxLayout(orientation='horizontal', spacing=10)
+        btn_yes = Button(text="Yes")
+        btn_no = Button(text="No")
+        btn_layout.add_widget(btn_yes)
+        btn_layout.add_widget(btn_no)
+        layout.add_widget(label)
+        layout.add_widget(btn_layout)
+        popup = Popup(title="Create Note?", content=layout, size_hint=(0.8, 0.4))
+
+        def on_yes(instance):
+            self.add_note_from_text(note_text)
+            popup.dismiss()
+
+        def on_no(instance):
+            popup.dismiss()
+
+        btn_yes.bind(on_press=on_yes)
+        btn_no.bind(on_press=on_no)
+        popup.open()
+
+    def add_note_from_text(self, text):
+        timestamp = self.format_timestamp()
+        note_entry = f"[{timestamp}] {text}\n\n"
+        current_notes = self.notes_text.text if self.notes_text.text else ""
+        new_notes = current_notes + note_entry
+        self.notes_text.text = new_notes
+        current_lang = self.app_instance.config_service.get_language()
+        if current_lang == 'he-IL':
+            display_text = self.fix_hebrew_display_direction(new_notes)
+            self.chat_history.text = display_text
+        else:
+            self.chat_history.text = new_notes
+        preview = text[:30] + "..." if len(text) > 30 else text
+        self.status_label.text = f'Added: "{preview}"'
+
+    def translate_agent_message(self, message, lang):
+        translations = {
+            "Do you want me to create a note called": "האם ליצור רשומה בשם",
+            "A note with the name": "רשומה בשם",
+            "already exists. Do you want to override it?": "כבר קיימת. האם להחליף אותה?",
+            "Created note:": "נוצרה רשומה:",
+            "Note": "רשומה",
+            "was overridden.": "הוחלפה.",
+            "I couldn't understand your request. Please provide a clear instruction for your notes.": "לא הצלחתי להבין את הבקשה שלך. אנא נסח הוראה ברורה עבור הרשומות שלך.",
+            "OK. I will create a note with the title": "בסדר. אצור רשומה עם הכותרת",
+            "Note not found": "הרשומה לא נמצאה",
+            "Creating a note with the title": "יוצר רשומה עם הכותרת",
+            "Searching for notes related to": "מחפש רשומות הקשורות ל",
+            "Note was overridden.": "הרשומה הוחלפה.",
+            "yes": "כן",
+            "no": "לא"
+        }
+        if lang == 'he-IL' or (lang and lang.startswith('he')):
+            for en, he in translations.items():
+                if en in message:
+                    message = message.replace(en, he)
+        return message
+
+    def add_chat_message(self, sender, message):
+        # sender: 'user' or 'agent'
+        print(f"[DEBUG] add_chat_message: sender={sender}, original_message={message}")
+        current_lang = self.app_instance.config_service.get_language()
+        if current_lang == 'he-IL':
+            fixed_message = self.fix_hebrew_display_direction(message)
+            print(f"[DEBUG] add_chat_message: after fix_hebrew_display_direction: {fixed_message}")
+        else:
+            fixed_message = message
+        color = (0.8, 0.9, 1, 1) if sender == 'user' else (0.9, 1, 0.8, 1)
+        align = 'right' if sender == 'user' else 'left'
+        font_name = 'app/fonts/Alef-Regular.ttf'
+        if not os.path.exists(font_name):
+            print("[WARNING] Alef Regular font not found. Text may not display correctly.")
+        print(f"[DEBUG] Displaying message: {fixed_message} with font: {font_name}")
+        label_kwargs = {
+            "text": fixed_message,
+            "size_hint_y": None,
+            "height": 40,
+            "color": (1, 1, 1, 1),  # White text for high contrast
+            "halign": align,
+            "valign": 'middle',
+            "text_size": (self.chat_history.width - 40, None),
+            "padding": (10, 5),
+            "font_size": '20sp',
+            "font_name": font_name
+        }
+        msg_label = Label(**label_kwargs)
+        msg_label.canvas.before.clear()
+        with msg_label.canvas.before:
+            Color(0.7, 0.7, 0.7, 0.5)
+            Line(rectangle=(msg_label.x, msg_label.y, msg_label.width, msg_label.height), width=1.2)
+        self.chat_history.add_widget(msg_label)
+        # Scroll to the bottom
+        self.chat_history.parent.scroll_y = 0
 
     def on_speech_result(self, text):
         """Handle speech recognition result with modern feedback"""
         if text and text.strip():
-            # Ensure proper Unicode handling for Hebrew text
             try:
                 # Convert to proper Unicode if needed
                 if isinstance(text, bytes):
                     text = text.decode('utf-8')
-                
-                # Clean and validate the text
                 clean_text = text.strip()
-                
-                # Simple timestamp
-                timestamp = self.format_timestamp()
-                
-                # Use the text as-is since Google Speech API already provides correct direction
-                processed_text = clean_text
-                
-                # Create the note entry manually
-                note_entry = f"[{timestamp}] {processed_text}\n\n"
-                
-                # Update both the hidden TextInput and custom display
-                current_notes = self.notes_text.text if self.notes_text.text else ""
-                new_notes = current_notes + note_entry
-                
-                # Store original text in hidden TextInput
-                self.notes_text.text = new_notes
-                
-                # Fix Hebrew direction only for display widget if language is Hebrew
                 current_lang = self.app_instance.config_service.get_language()
-                if current_lang == 'he-IL':
-                    display_text = self.fix_hebrew_display_direction(new_notes)
-                    self.notes_display.text = display_text
-                else:
-                    # For non-Hebrew languages, use text as-is
-                    self.notes_display.text = new_notes
-                
-                # Create truncated preview for status
-                preview = processed_text[:30] + "..." if len(processed_text) > 30 else processed_text
-                self.status_label.text = f'Added: "{preview}"'
-                
-                print(f"Speech text (as received): {clean_text}")
-                print(f"Using text as-is: {processed_text}")
-                print(f"Timestamp: {timestamp}")
-                
+                # Add user's message to chat
+                self.add_chat_message('user', clean_text)
+                # Use NLPService for natural language command processing
+                result = self.app_instance.nlp_service.process_command(clean_text, current_lang)
+                agent_msg = result.get("response", "")
+                # Always translate agent message if app is set to Hebrew
+                if current_lang == 'he-IL' or current_lang.startswith('he'):
+                    agent_msg = self.translate_agent_message(agent_msg, current_lang)
+                self.add_chat_message('agent', agent_msg)
+                self.status_label.text = agent_msg
+                # If needed, handle confirmation and listening logic as before
+                if result["operation"] == "confirm":
+                    self.app_instance.speech_service.start_listening(
+                        on_result=self.on_speech_result,
+                        on_error=self.on_speech_error,
+                        on_auto_stop=self.on_auto_stop
+                    )
+                elif result["operation"] != "error":
+                    self.refresh_notes_display()
             except Exception as e:
                 print(f"Error processing speech result: {e}")
                 self.status_label.text = f'Error processing text: {e}'
-        
         # Reset to listening state
         Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 2)
     
@@ -424,7 +417,7 @@ class MainScreen(Screen):
     def clear_notes(self, instance):
         """Clear all notes with modern confirmation"""
         self.notes_text.text = ''
-        self.notes_display.text = ''
+        self.chat_history.text = ''
         self.status_label.text = 'Notes cleared'
         Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 2)
     
@@ -442,7 +435,7 @@ class MainScreen(Screen):
         
         # Add test text after a short delay to ensure UI is ready
         def add_test_text(dt):
-            self.notes_display.text = f"[TEST] {test_text}\n\n"
+            self.chat_history.text = f"[TEST] {test_text}\n\n"
             self.notes_text.text = f"[TEST] {test_text}\n\n"
         
         Clock.schedule_once(add_test_text, 1)
@@ -466,53 +459,27 @@ class MainScreen(Screen):
     
     def refresh_notes_display(self):
         """Refresh the notes display based on current language"""
-        if hasattr(self, 'notes_text') and hasattr(self, 'notes_display'):
+        if hasattr(self, 'notes_text') and hasattr(self, 'chat_history'):
             current_text = self.notes_text.text
             current_lang = self.app_instance.config_service.get_language()
             
             if current_lang == 'he-IL' and current_text:
                 # Apply Hebrew direction fix
                 display_text = self.fix_hebrew_display_direction(current_text)
-                self.notes_display.text = display_text
+                self.chat_history.text = display_text
             else:
                 # Use text as-is for non-Hebrew languages
-                self.notes_display.text = current_text
+                self.chat_history.text = current_text
     
     def get_language_font(self):
         """Get the appropriate font for the current language"""
-        current_lang = self.app_instance.config_service.get_language()
         import os
-        
-        if current_lang == 'he-IL':
-            # Try fonts that support both Hebrew and English
-            hebrew_fonts = [
-                '/System/Library/Fonts/Arial.ttf',  # Best choice - supports both Hebrew and English
-                '/System/Library/Fonts/Arial Hebrew.ttc',
-                '/System/Library/Fonts/ArialHB.ttc', 
-                '/System/Library/Fonts/SFHebrew.ttf'
-            ]
-            
-            for font_path in hebrew_fonts:
-                if os.path.exists(font_path):
-                    print(f"Using font for Hebrew: {font_path}")
-                    return font_path
-            
-            print("No Hebrew font found, using default")
-            return None
-        else:
-            # For English and other languages, use system default or Arial
-            english_fonts = [
-                '/System/Library/Fonts/Arial.ttf',
-                '/System/Library/Fonts/Helvetica.ttc'
-            ]
-            
-            for font_path in english_fonts:
-                if os.path.exists(font_path):
-                    print(f"Using font for English: {font_path}")
-                    return font_path
-            
-            print("Using system default font for English")
-            return None
+        font_path = 'app/fonts/Alef-Regular.ttf'
+        if os.path.exists(font_path):
+            print(f"Using Alef Regular font: {font_path}")
+            return font_path
+        print("[WARNING] Alef Regular font not found, using system default.")
+        return None
     
     def get_text_alignment(self):
         """Get the appropriate text alignment for the current language"""
@@ -525,10 +492,10 @@ class MainScreen(Screen):
     
     def update_notes_font(self):
         """Update the notes display font based on current language"""
-        if hasattr(self, 'notes_display'):
+        if hasattr(self, 'chat_history'):
             font_name = self.get_language_font()
             if font_name:  # Only set font_name if it's not None
-                self.notes_display.font_name = font_name
+                self.chat_history.font_name = font_name
             # TextInput doesn't have halign, so skip that
     
     def format_timestamp(self):
@@ -553,3 +520,9 @@ class MainScreen(Screen):
         result = timestamp[0] + timestamp[1] + ":" + timestamp[2] + timestamp[3]
         
         return result 
+
+    def fix_hebrew_quotes(self, text, lang):
+        if lang.startswith("he"):
+            # Replace standard double quotes with Hebrew gershayim
+            text = text.replace('"', '״')
+        return text 

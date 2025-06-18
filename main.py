@@ -12,6 +12,7 @@ import platform
 from app.widgets import SideMenu
 from app.screens import MainScreen, SettingsScreen, NotesScreen, AboutScreen
 from app.services import SpeechService, ConfigService
+from app.services.nlp_service import NLPService
 
 # Kivy requires minimum version
 kivy.require('2.0.0')
@@ -69,6 +70,9 @@ class NoteSpeakerApp(App):
         # Initialize services
         self.config_service = ConfigService()
         self.speech_service = SpeechService()
+        # Initialize NLPService with Gemini API key
+        GEMINI_API_KEY = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4"  # <-- Put your Gemini API key here
+        self.nlp_service = NLPService(api_key=GEMINI_API_KEY)
         
         # Load saved language setting
         saved_language = self.config_service.get_language()
