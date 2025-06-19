@@ -13,6 +13,7 @@ from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 from kivy.uix.popup import Popup
 import os
 from bidi.algorithm import get_display
+from app.widgets.note_graph_widget import NoteGraphWidget
 
 
 
@@ -79,9 +80,17 @@ class MainScreen(Screen):
         # Notes display with modern styling
         notes_card = self.create_notes_card()
         
+        # --- Visualization section ---
+        vis_section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(220), padding=dp(10))
+        vis_title = Label(text='Query and Visualization', font_size='18sp', color=(1,1,1,1), bold=True, size_hint_y=None, height=dp(30))
+        self.graph_widget = NoteGraphWidget(fetch_note_by_id=self.fetch_note_by_id, get_language=self.get_language, fix_hebrew_display_direction=self.fix_hebrew_display_direction)
+        vis_section.add_widget(vis_title)
+        vis_section.add_widget(self.graph_widget)
+        
         main_layout.add_widget(header_layout)
         main_layout.add_widget(status_card)
         main_layout.add_widget(control_card)
+        main_layout.add_widget(vis_section)
         main_layout.add_widget(notes_card)
         
         self.add_widget(main_layout)
@@ -177,8 +186,7 @@ class MainScreen(Screen):
         return card
     
     def create_notes_card(self):
-        """Create notes display card with modern styling"""
-        # Rename to 'Chat' and use a BoxLayout for chat messages
+        """Create notes display card with modern styling and a border around the chat scroll box"""
         chat_title = Label(
             text='Chat',
             font_size='20sp',
@@ -187,6 +195,17 @@ class MainScreen(Screen):
             halign='left'
         )
         chat_title.text_size = (None, None)
+
+        # Create a container for the scroll/chat with a border
+        chat_container = BoxLayout(orientation='vertical', size_hint_y=1, padding=dp(8))
+        with chat_container.canvas.before:
+            from kivy.graphics import Color, RoundedRectangle, Line
+            Color(0.2, 0.25, 0.35, 0.9)  # Card background
+            chat_container.bg = RoundedRectangle(size=chat_container.size, pos=chat_container.pos, radius=[15])
+            Color(0.5, 0.7, 1, 1)  # Border color (light blue)
+            chat_container.border = Line(rounded_rectangle=[chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15], width=2)
+            chat_container.bind(size=lambda instance, value: (setattr(chat_container.bg, 'size', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])),
+                                 pos=lambda instance, value: (setattr(chat_container.bg, 'pos', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])))
 
         scroll = ScrollView()
         self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None)
@@ -201,9 +220,11 @@ class MainScreen(Screen):
             readonly=True
         )
 
+        chat_container.add_widget(scroll)
+
         card = BoxLayout(orientation='vertical')
         card.add_widget(chat_title)
-        card.add_widget(scroll)
+        card.add_widget(chat_container)
         return card
 
     def get_app_title(self):
@@ -316,34 +337,59 @@ class MainScreen(Screen):
             "Searching for notes related to": "מחפש רשומות הקשורות ל",
             "Note was overridden.": "הרשומה הוחלפה.",
             "yes": "כן",
-            "no": "לא"
+            "no": "לא",
+            "Found 1 note": "נמצאה רשומה אחת",
+            "Found ": "נמצאו ",
+            " notes": " רשומות"
         }
         if lang == 'he-IL' or (lang and lang.startswith('he')):
-            for en, he in translations.items():
-                if en in message:
-                    message = message.replace(en, he)
+            # Special handling for 'Found X notes'
+            import re
+            match = re.match(r"Found (\d+) notes", message)
+            if match:
+                count = match.group(1)
+                message = f"נמצאו {count} רשומות"
+            elif message.strip() == "Found 1 note":
+                message = "נמצאה רשומה אחת"
+            else:
+                for en, he in translations.items():
+                    if en in message:
+                        message = message.replace(en, he)
         return message
+
+    # Hebrew and English chat prefixes
+    HEBREW_USER_PREFIX = ':שמתשמ'
+    HEBREW_AGENT_PREFIX = ':ןכוס'
+    EN_USER_PREFIX = 'user:'
+    EN_AGENT_PREFIX = 'agent:'
 
     def add_chat_message(self, sender, message):
         # sender: 'user' or 'agent'
         print(f"[DEBUG] add_chat_message: sender={sender}, original_message={message}")
         current_lang = self.app_instance.config_service.get_language()
+        if sender == 'user':
+            prefix = self.HEBREW_USER_PREFIX if current_lang.startswith('he') else self.EN_USER_PREFIX
+        else:
+            prefix = self.HEBREW_AGENT_PREFIX if current_lang.startswith('he') else self.EN_AGENT_PREFIX
         if current_lang == 'he-IL':
             fixed_message = self.fix_hebrew_display_direction(message)
             print(f"[DEBUG] add_chat_message: after fix_hebrew_display_direction: {fixed_message}")
+            display_text = fixed_message + ' ' + prefix
+            align = 'right'
         else:
             fixed_message = message
-        color = (0.8, 0.9, 1, 1) if sender == 'user' else (0.9, 1, 0.8, 1)
-        align = 'right' if sender == 'user' else 'left'
+            display_text = prefix + ' ' + fixed_message
+            align = 'left'
+        color = (1, 1, 1, 1)
         font_name = 'app/fonts/Alef-Regular.ttf'
         if not os.path.exists(font_name):
             print("[WARNING] Alef Regular font not found. Text may not display correctly.")
         print(f"[DEBUG] Displaying message: {fixed_message} with font: {font_name}")
         label_kwargs = {
-            "text": fixed_message,
+            "text": display_text,
             "size_hint_y": None,
             "height": 40,
-            "color": (1, 1, 1, 1),  # White text for high contrast
+            "color": color,  # White text for high contrast
             "halign": align,
             "valign": 'middle',
             "text_size": (self.chat_history.width - 40, None),
@@ -386,6 +432,14 @@ class MainScreen(Screen):
                         on_error=self.on_speech_error,
                         on_auto_stop=self.on_auto_stop
                     )
+                elif result["operation"] == "find" and "matches" in result:
+                    notes = result["matches"]
+                    relations = []
+                    for note in notes:
+                        if "relations" in note:
+                            for rel_id in note["relations"]:
+                                relations.append((note["id"], rel_id))
+                    self.graph_widget.set_data(notes, relations)
                 elif result["operation"] != "error":
                     self.refresh_notes_display()
             except Exception as e:
@@ -417,7 +471,8 @@ class MainScreen(Screen):
     def clear_notes(self, instance):
         """Clear all notes with modern confirmation"""
         self.notes_text.text = ''
-        self.chat_history.text = ''
+        if hasattr(self, 'chat_history'):
+            self.chat_history.clear_widgets()  # Remove all chat messages from the chat UI
         self.status_label.text = 'Notes cleared'
         Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 2)
     
@@ -451,7 +506,9 @@ class MainScreen(Screen):
                     if hasattr(title_widget, 'text'):
                         title_widget.text = self.get_app_title()
                         break
-        
+        # Force refresh of app title in case language display name changed
+        if hasattr(self.app_instance, 'root_window') and self.app_instance.root_window is not None:
+            self.app_instance.root_window.title = self.get_app_title()
         # Update notes font and alignment based on current language
         self.update_notes_font()
         # Refresh the display with current language formatting
@@ -526,3 +583,13 @@ class MainScreen(Screen):
             # Replace standard double quotes with Hebrew gershayim
             text = text.replace('"', '״')
         return text 
+
+    def fetch_note_by_id(self, note_id):
+        # Helper to fetch a note by id from NLPService notes
+        for note in self.app_instance.nlp_service.notes:
+            if note.get('id') == note_id:
+                return note
+        return None 
+
+    def get_language(self):
+        return self.app_instance.config_service.get_language() 

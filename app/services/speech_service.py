@@ -10,7 +10,7 @@ class SpeechService:
     # Supported languages dictionary (name -> code)
     SUPPORTED_LANGUAGES = {
         'English (US)': 'en-US',
-        'Hebrew (Israel)': 'he-IL',
+        'Hebrew': 'he-IL',
     }
     
     # Languages dictionary (code -> name) for modern UI
