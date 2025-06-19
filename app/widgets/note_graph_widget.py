@@ -4,6 +4,9 @@ from kivy.metrics import dp
 from kivy.uix.label import Label
 import os
 from bidi.algorithm import get_display
+from kivy.uix.floatlayout import FloatLayout
+from kivy.graphics import Color, RoundedRectangle
+from kivy.core.window import Window
 
 class NoteGraphWidget(Widget):
     def __init__(self, fetch_note_by_id=None, get_language=None, fix_hebrew_display_direction=None, **kwargs):
@@ -125,28 +128,59 @@ class NoteGraphWidget(Widget):
         return super().on_touch_down(touch)
 
     def on_mouse_pos(self, window, pos):
-        # Show tooltip if hovering over a node
         node_radius = dp(36)
         for node_pos, note in self.node_positions:
             x, y = node_pos
             if (x - pos[0]) ** 2 + (y - pos[1]) ** 2 <= node_radius ** 2:
-                # Show tooltip
                 if not self.tooltip_label:
                     info = '\n'.join(f"{k}: {v}" for k, v in note.items() if k != 'pos')
-                    self.tooltip_label = Label(text=info,
-                                              font_size='18sp',
-                                              color=(1, 1, 1, 1),
-                                              font_name='app/fonts/Alef-Regular.ttf' if os.path.exists('app/fonts/Alef-Regular.ttf') else None,
-                                              size_hint=(None, None),
-                                              size=(dp(300), dp(120)),
-                                              halign='left',
-                                              valign='top',
-                                              pos=(x + node_radius, y + node_radius))
-                    self.tooltip_label.text_size = (dp(300), dp(120))
-                    self.add_widget(self.tooltip_label)
+                    from kivy.uix.floatlayout import FloatLayout
+                    from kivy.graphics import Color, RoundedRectangle
+                    self.tooltip_label = FloatLayout(size_hint=(None, None), size=(dp(300), dp(120)))
+                    with self.tooltip_label.canvas.before:
+                        Color(0.1, 0.1, 0.1, 0.92)
+                        self.tooltip_bg = RoundedRectangle(size=(dp(300), dp(120)), pos=(0, 0), radius=[12])
+                    label = Label(text=info,
+                                  font_size='18sp',
+                                  color=(1, 1, 1, 1),
+                                  font_name='app/fonts/Alef-Regular.ttf' if os.path.exists('app/fonts/Alef-Regular.ttf') else None,
+                                  size_hint=(None, None),
+                                  size=(dp(300), dp(120)),
+                                  halign='left',
+                                  valign='top',
+                                  pos=(0, 0))
+                    label.text_size = (dp(300), dp(120))
+                    self.tooltip_label.add_widget(label)
+                    # Position tooltip next to the node, not mouse
+                    win_w, win_h = Window.size
+                    tooltip_x = x + node_radius + dp(10)
+                    tooltip_y = y - dp(60)
+                    # If too close to right edge, show to the left
+                    if tooltip_x + dp(300) > win_w:
+                        tooltip_x = x - node_radius - dp(10) - dp(300)
+                    # If too close to bottom, move up
+                    if tooltip_y < 0:
+                        tooltip_y = y + node_radius + dp(10)
+                    # Clamp to window
+                    tooltip_x = max(0, min(tooltip_x, win_w - dp(300)))
+                    tooltip_y = max(0, min(tooltip_y, win_h - dp(120)))
+                    self.tooltip_label.pos = (tooltip_x, tooltip_y)
+                    Window.add_widget(self.tooltip_label)
+                else:
+                    # Update position if already shown
+                    win_w, win_h = Window.size
+                    tooltip_x = x + node_radius + dp(10)
+                    tooltip_y = y - dp(60)
+                    if tooltip_x + dp(300) > win_w:
+                        tooltip_x = x - node_radius - dp(10) - dp(300)
+                    if tooltip_y < 0:
+                        tooltip_y = y + node_radius + dp(10)
+                    tooltip_x = max(0, min(tooltip_x, win_w - dp(300)))
+                    tooltip_y = max(0, min(tooltip_y, win_h - dp(120)))
+                    self.tooltip_label.pos = (tooltip_x, tooltip_y)
                 return
         if self.tooltip_label:
-            self.remove_widget(self.tooltip_label)
+            Window.remove_widget(self.tooltip_label)
             self.tooltip_label = None
 
     def on_parent(self, instance, parent):
@@ -157,6 +191,9 @@ class NoteGraphWidget(Widget):
         else:
             from kivy.core.window import Window
             Window.unbind(mouse_pos=self._on_mouse_pos_wrapper)
+            if self.tooltip_label:
+                Window.remove_widget(self.tooltip_label)
+                self.tooltip_label = None
 
     def _on_mouse_pos_wrapper(self, window, pos):
         # Convert window coords to local

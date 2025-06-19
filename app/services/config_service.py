@@ -71,16 +71,15 @@ class ConfigService:
         return self.config.get(key, default)
     
     def set(self, key, value):
-        """Set a configuration value and save"""
+        """Set a configuration value (no autosave)"""
         self.config[key] = value
-        self.save_config()
     
     def get_language(self):
         """Get the current language setting"""
         return self.get('language', 'en-US')
     
     def set_language(self, language_code):
-        """Set the language and save"""
+        """Set the language (no autosave)"""
         self.set('language', language_code)
     
     def get_silence_timeout(self):
@@ -88,7 +87,7 @@ class ConfigService:
         return self.get('silence_timeout', 5)
     
     def set_silence_timeout(self, timeout):
-        """Set the silence timeout and save"""
+        """Set the silence timeout (no autosave)"""
         self.set('silence_timeout', timeout)
     
     def get_recording_timeout(self):
@@ -96,5 +95,5 @@ class ConfigService:
         return self.get('recording_timeout', 600)
     
     def set_recording_timeout(self, timeout):
-        """Set the recording timeout and save"""
+        """Set the recording timeout (no autosave)"""
         self.set('recording_timeout', timeout) 

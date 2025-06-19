@@ -109,28 +109,21 @@ class LanguageDropdown(BoxLayout):
         instance.text_size = (width - dp(40), None)
     
     def select_language(self, lang_code):
-        """Handle language selection"""
+        """Handle language selection (no autosave)"""
         print(f"DEBUG: Language selected: {lang_code}")
-        
-        # Update the config
+        # Update the config in memory only
         self.config_service.set_language(lang_code)
-        
         # Update the speech service language
         self.speech_service.set_language(lang_code)
-        
-        # Update button text - simple display since we only have 2 languages
+        # Update button text
         lang_name = self.speech_service.LANGUAGES[lang_code]
         self.main_button.text = lang_name
-        
         # Close dropdown
         self.dropdown.dismiss()
-        
         print(f"DEBUG: Language changed to: {lang_name}")
         print(f"DEBUG: Speech service updated to: {lang_code}")
-        
         # Refresh main screen if possible to update fonts and display
         try:
-            # Get the app instance to access screens
             from kivy.app import App
             app = App.get_running_app()
             if hasattr(app, 'main_screen'):

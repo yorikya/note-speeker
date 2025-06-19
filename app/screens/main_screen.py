@@ -277,11 +277,11 @@ class MainScreen(Screen):
     def fix_hebrew_display_direction(self, text):
         """Fix Hebrew text direction for display in UI widgets"""
         current_lang = self.app_instance.config_service.get_language()
-        print(f"[DEBUG] fix_hebrew_display_direction: input={text}")
+        # print(f"[DEBUG] fix_hebrew_display_direction: input={text}")
         if current_lang != 'he-IL':
             return text
         result = get_display(text)
-        print(f"[DEBUG] fix_hebrew_display_direction: output={result}")
+        # print(f"[DEBUG] fix_hebrew_display_direction: output={result}")
         return result
 
     def show_yes_no_dialog(self, note_text, result):

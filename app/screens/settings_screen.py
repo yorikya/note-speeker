@@ -112,8 +112,21 @@ class SettingsScreen(Screen):
         
         scroll.add_widget(content)
         
+        # Add Save Settings button at the bottom
+        save_btn = Button(
+            text='Save Settings',
+            size_hint_y=None,
+            height=dp(50),
+            font_size='18sp',
+            background_color=(0.2, 0.6, 1.0, 1),
+            color=(1, 1, 1, 1),
+            bold=True
+        )
+        save_btn.bind(on_press=self.save_settings)
+        
         main_layout.add_widget(header)
         main_layout.add_widget(scroll)
+        main_layout.add_widget(save_btn)
         self.add_widget(main_layout)
     
     def create_card_section(self):
@@ -359,4 +372,13 @@ class SettingsScreen(Screen):
         """Called when entering the settings screen"""
         # Refresh the language dropdown to show current setting
         if hasattr(self, 'language_dropdown'):
-            self.language_dropdown.refresh_selection() 
+            self.language_dropdown.refresh_selection()
+    
+    def save_settings(self, instance):
+        """Save the current settings to disk and show confirmation"""
+        success = self.app_instance.config_service.save_config()
+        from kivy.uix.popup import Popup
+        from kivy.uix.label import Label
+        msg = 'Settings saved successfully!' if success else 'Failed to save settings.'
+        popup = Popup(title='Save Settings', content=Label(text=msg), size_hint=(0.6, 0.3))
+        popup.open() 
