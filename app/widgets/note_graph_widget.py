@@ -20,6 +20,7 @@ class NoteGraphWidget(Widget):
         self.fix_hebrew_display_direction = fix_hebrew_display_direction  # callback for Hebrew direction
         self.tooltip_label = None
         self.bind(size=self._on_resize, pos=self._on_resize)
+        Window.bind(mouse_pos=self.on_mouse_pos)
 
     def set_data(self, notes, relations):
         self.notes = notes
@@ -127,57 +128,72 @@ class NoteGraphWidget(Widget):
                     return True
         return super().on_touch_down(touch)
 
+    def fix_hebrew_display_direction(self, text):
+        """Fix Hebrew text direction for display in UI widgets"""
+        if text is None:
+            return ""  # Return empty string for None values
+        from bidi.algorithm import get_display
+        return get_display(str(text))
+
     def on_mouse_pos(self, window, pos):
         node_radius = dp(36)
         for node_pos, note in self.node_positions:
             x, y = node_pos
             if (x - pos[0]) ** 2 + (y - pos[1]) ** 2 <= node_radius ** 2:
                 if not self.tooltip_label:
-                    info = '\n'.join(f"{k}: {v}" for k, v in note.items() if k != 'pos')
+                    # Fix Hebrew text direction for each field
+                    info_items = []
+                    for k, v in note.items():
+                        if k != 'pos':
+                            # Fix both key and value, handle None values
+                            fixed_key = self.fix_hebrew_display_direction(k) if k is not None else ""
+                            fixed_value = self.fix_hebrew_display_direction(v) if v is not None else ""
+                            if fixed_key or fixed_value:  # Only add if either has content
+                                info_items.append(f"{fixed_key}: {fixed_value}")
+                    info = '\n'.join(info_items)
+                    
                     from kivy.uix.floatlayout import FloatLayout
                     from kivy.graphics import Color, RoundedRectangle
                     self.tooltip_label = FloatLayout(size_hint=(None, None), size=(dp(300), dp(120)))
+                    
                     with self.tooltip_label.canvas.before:
-                        Color(0.1, 0.1, 0.1, 0.92)
-                        self.tooltip_bg = RoundedRectangle(size=(dp(300), dp(120)), pos=(0, 0), radius=[12])
-                    label = Label(text=info,
-                                  font_size='18sp',
-                                  color=(1, 1, 1, 1),
-                                  font_name='app/fonts/Alef-Regular.ttf' if os.path.exists('app/fonts/Alef-Regular.ttf') else None,
-                                  size_hint=(None, None),
-                                  size=(dp(300), dp(120)),
-                                  halign='left',
-                                  valign='top',
-                                  pos=(0, 0))
-                    label.text_size = (dp(300), dp(120))
-                    self.tooltip_label.add_widget(label)
-                    # Position tooltip next to the node, not mouse
-                    win_w, win_h = Window.size
-                    tooltip_x = x + node_radius + dp(10)
-                    tooltip_y = y - dp(60)
-                    # If too close to right edge, show to the left
-                    if tooltip_x + dp(300) > win_w:
-                        tooltip_x = x - node_radius - dp(10) - dp(300)
-                    # If too close to bottom, move up
+                        Color(0, 0, 0, 0.8)  # Semi-transparent black
+                        self.rect = RoundedRectangle(pos=self.tooltip_label.pos, size=self.tooltip_label.size, radius=[dp(10)])
+                    
+                    from kivy.uix.label import Label
+                    import os
+                    
+                    content = Label(
+                        text=info,
+                        color=(1, 1, 1, 1),  # White text
+                        size_hint=(None, None),
+                        size=self.tooltip_label.size,
+                        halign='right',  # Right-aligned for Hebrew
+                        valign='middle',
+                        font_name='app/fonts/Alef-Regular.ttf' if os.path.exists('app/fonts/Alef-Regular.ttf') else None,
+                        font_size='16sp',
+                        padding=(dp(10), dp(10))
+                    )
+                    content.text_size = content.size  # Enable text wrapping
+                    self.tooltip_label.add_widget(content)
+                    
+                    # Convert widget coordinates to window coordinates
+                    win_x, win_y = self.to_window(x, y)
+                    
+                    # Position tooltip to the right of the node
+                    tooltip_x = win_x + node_radius + dp(10)
+                    tooltip_y = win_y - self.tooltip_label.height / 2
+                    
+                    # Adjust if tooltip would go off screen
+                    if tooltip_x + self.tooltip_label.width > Window.width:
+                        tooltip_x = win_x - node_radius - dp(10) - self.tooltip_label.width
                     if tooltip_y < 0:
-                        tooltip_y = y + node_radius + dp(10)
-                    # Clamp to window
-                    tooltip_x = max(0, min(tooltip_x, win_w - dp(300)))
-                    tooltip_y = max(0, min(tooltip_y, win_h - dp(120)))
+                        tooltip_y = 0
+                    elif tooltip_y + self.tooltip_label.height > Window.height:
+                        tooltip_y = Window.height - self.tooltip_label.height
+                    
                     self.tooltip_label.pos = (tooltip_x, tooltip_y)
                     Window.add_widget(self.tooltip_label)
-                else:
-                    # Update position if already shown
-                    win_w, win_h = Window.size
-                    tooltip_x = x + node_radius + dp(10)
-                    tooltip_y = y - dp(60)
-                    if tooltip_x + dp(300) > win_w:
-                        tooltip_x = x - node_radius - dp(10) - dp(300)
-                    if tooltip_y < 0:
-                        tooltip_y = y + node_radius + dp(10)
-                    tooltip_x = max(0, min(tooltip_x, win_w - dp(300)))
-                    tooltip_y = max(0, min(tooltip_y, win_h - dp(120)))
-                    self.tooltip_label.pos = (tooltip_x, tooltip_y)
                 return
         if self.tooltip_label:
             Window.remove_widget(self.tooltip_label)
