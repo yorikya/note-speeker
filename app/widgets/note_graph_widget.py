@@ -8,6 +8,8 @@ from kivy.core.window import Window
 from bidi.algorithm import get_display
 from kivy.uix.widget import Widget
 from kivy.metrics import dp
+from kivy.uix.scatter import Scatter
+from kivy.uix.floatlayout import FloatLayout
 
 
 class NoteNode(RelativeLayout):
@@ -87,6 +89,15 @@ class NoteGraphWidget(RelativeLayout):
         self.links = []
         self.node_widgets = {}
         self._tooltip = None
+
+        self.scatter = Scatter(
+            size_hint=(1, 1),
+            auto_bring_to_front=False
+        )
+        self.drawing_area = FloatLayout()
+        self.scatter.add_widget(self.drawing_area)
+        self.add_widget(self.scatter)
+
         Window.bind(mouse_pos=self.on_mouse_pos)
         self.bind(size=self.draw_graph, pos=self.draw_graph)
 
@@ -109,17 +120,28 @@ class NoteGraphWidget(RelativeLayout):
 
     def draw_graph(self, *args):
         """Draw the graph on the widget's canvas."""
-        self.clear_widgets()
+        self.drawing_area.clear_widgets()
+        self.drawing_area.canvas.clear()
         self.node_widgets.clear()
         
         if not self.nodes:
+            self.scatter.scale = 1.0
+            self.scatter.pos = self.pos
             return
 
-        center_x = self.width / 2
-        center_y = self.height / 2
-        radius = min(self.width, self.height) / 3 if min(self.width, self.height) > 0 else 100
+        num_nodes = len(self.nodes)
+        
+        # Determine radius based on number of nodes.
+        radius = 100 * math.sqrt(num_nodes)
+        
+        node_size = 100
+        area_size = 2 * radius + node_size * 1.5
+        self.drawing_area.size = (area_size, area_size)
+
+        center_x = self.drawing_area.width / 2
+        center_y = self.drawing_area.height / 2
             
-        angle_step = (2 * math.pi) / len(self.nodes) if len(self.nodes) > 0 else 0
+        angle_step = (2 * math.pi) / num_nodes if num_nodes > 0 else 0
 
         positions = {}
         node_ids = list(self.nodes.keys())
@@ -130,7 +152,7 @@ class NoteGraphWidget(RelativeLayout):
             positions[node_id] = (x, y)
 
         # Create a widget to draw links on, and add it first so it's in the background
-        links_widget = Widget()
+        links_widget = Widget(size=self.drawing_area.size)
         with links_widget.canvas:
             Color(0.5, 0.5, 0.5, 1)
             for link in self.links:
@@ -139,15 +161,24 @@ class NoteGraphWidget(RelativeLayout):
                 if source_pos and target_pos:
                     Line(points=[source_pos[0], source_pos[1],
                                 target_pos[0], target_pos[1]], width=1.5)
-        self.add_widget(links_widget)
+        self.drawing_area.add_widget(links_widget)
 
         for node_id, pos in positions.items():
             node_widget = NoteNode(
                 note_data=self.nodes[node_id],
                 pos=(pos[0] - 50, pos[1] - 50) # Center the circle
             )
-            self.add_widget(node_widget)
+            self.drawing_area.add_widget(node_widget)
             self.node_widgets[node_id] = node_widget
+        
+        # Auto-zoom and center
+        if self.drawing_area.width == 0 or self.width == 0:
+             return
+        
+        scale = min(self.width / self.drawing_area.width, self.height / self.drawing_area.height)
+        self.scatter.scale = scale
+        self.scatter.center = self.center
+
 
     def on_mouse_pos(self, *args):
         """Handle mouse movement for tooltips."""
@@ -157,19 +188,30 @@ class NoteGraphWidget(RelativeLayout):
             self.remove_widget(self._tooltip)
         self._tooltip = None
 
-        if self.parent: # Ensure the widget is attached to a parent
-            widget_pos = self.to_widget(*pos, relative=True)
-            for node_id, node_widget in self.node_widgets.items():
-                if node_widget.collide_point(*widget_pos):
-                    node_data = self.nodes.get(node_id, {})
-                    
-                    title = node_data.get('title', '')
-                    desc = node_data.get('description', '')
-                    tooltip_text = f"Title: {title}"
-                    if desc:
-                        tooltip_text += f"\nDescription: {desc}"
-                    
-                    self._tooltip = Tooltip(pos=widget_pos)
-                    self.add_widget(self._tooltip)
-                    self._tooltip.set_text(tooltip_text)
-                    break
+        if not self.parent:
+            return
+
+        # Use coordinates relative to this widget
+        local_coords = self.to_widget(*pos, relative=True)
+
+        # Check if mouse is over the scatter widget
+        if not self.scatter.collide_point(*local_coords):
+            return
+            
+        # Transform to the scatter content's coordinate space
+        graph_coords = self.scatter.to_local(*local_coords)
+
+        for node_id, node_widget in self.node_widgets.items():
+            if node_widget.collide_point(*graph_coords):
+                node_data = self.nodes.get(node_id, {})
+                
+                title = node_data.get('title', '')
+                desc = node_data.get('description', '')
+                tooltip_text = f"Title: {title}"
+                if desc:
+                    tooltip_text += f"\nDescription: {desc}"
+                
+                self._tooltip = Tooltip(pos=(local_coords[0] + 15, local_coords[1] + 15))
+                self.add_widget(self._tooltip)
+                self._tooltip.set_text(tooltip_text)
+                break
