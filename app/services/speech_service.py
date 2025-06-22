@@ -16,9 +16,12 @@ class SpeechService:
     # Languages dictionary (code -> name) for modern UI
     LANGUAGES = {code: name for name, code in SUPPORTED_LANGUAGES.items()}
 
-    def __init__(self):
+    def __init__(self, config_service=None):
+        self.config_service = config_service
         self.recognizer = sr.Recognizer()
-        self.current_language = "en-US"  # Default language
+        # Get default language from config or use fallback
+        self.current_language = (config_service.get('speech_language', 'en-US') 
+                               if config_service else "en-US")
         self.is_listening = False
         self.listen_thread = None
         self.stop_listening_flag = False
@@ -35,6 +38,10 @@ class SpeechService:
         """Set the current language for speech recognition"""
         if language_code in self.SUPPORTED_LANGUAGES.values():
             self.current_language = language_code
+            # Save to config if available
+            if self.config_service:
+                self.config_service.set('speech_language', language_code)
+                self.config_service.save_config()
             print(f"Language set to: {language_code}")
             return True
         return False

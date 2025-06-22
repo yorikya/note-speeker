@@ -25,6 +25,8 @@ class MainScreen(Screen):
         super().__init__(**kwargs)
         self.app_instance = app_instance
         self.name = 'main'
+        self.current_note_context = None  # Track selected note
+        self.status_label = None  # Will hold the status label
         
         # Set modern gradient background
         with self.canvas.before:
@@ -81,10 +83,16 @@ class MainScreen(Screen):
         notes_card = self.create_notes_card()
         
         # --- Visualization section ---
-        vis_section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(220), padding=dp(10))
-        vis_title = Label(text='Query and Visualization', font_size='18sp', color=(1,1,1,1), bold=True, size_hint_y=None, height=dp(30))
-        self.graph_widget = NoteGraphWidget(fetch_note_by_id=self.fetch_note_by_id, get_language=self.get_language, fix_hebrew_display_direction=self.fix_hebrew_display_direction)
-        vis_section.add_widget(vis_title)
+        vis_section = BoxLayout(orientation='vertical', size_hint_y=0.6)
+        vis_section.add_widget(Label(
+            text="Query and Visualization",
+            size_hint_y=None,
+            height=dp(40),
+            font_size='20sp'
+        ))
+        
+        # Create graph widget with WebView
+        self.graph_widget = NoteGraphWidget(size_hint=(1, 1))
         vis_section.add_widget(self.graph_widget)
         
         main_layout.add_widget(header_layout)
@@ -92,6 +100,18 @@ class MainScreen(Screen):
         main_layout.add_widget(control_card)
         main_layout.add_widget(vis_section)
         main_layout.add_widget(notes_card)
+        
+        # Add status line at the bottom
+        self.status_label = Label(
+            text="Ready to record",
+            size_hint=(1, None),
+            height=dp(30),
+            halign='right',
+            valign='middle',
+            font_name='app/fonts/Alef-Regular.ttf'
+        )
+        self.status_label.bind(size=self.status_label.setter('text_size'))
+        main_layout.add_widget(self.status_label)
         
         self.add_widget(main_layout)
         
@@ -593,3 +613,92 @@ class MainScreen(Screen):
 
     def get_language(self):
         return self.app_instance.config_service.get_language() 
+
+    def update_note_context(self, note):
+        """Update the current note context and status line"""
+        self.current_note_context = note
+        if note:
+            status_text = f"Selected note: {self.fix_hebrew_display_direction(note['title'])}"
+        else:
+            status_text = "Ready to record"
+        self.status_label.text = status_text
+        
+    def process_command(self, command_text):
+        """Process a command from speech recognition"""
+        if not command_text:
+            return
+            
+        # Get current language
+        current_lang = self.app_instance.config_service.get_language()
+        is_hebrew = current_lang == 'he-IL'
+        
+        # Add user message to chat
+        self.add_chat_message('user', command_text)
+        
+        # Process command through NLP service
+        result = self.app_instance.nlp_service.process_command(command_text, current_lang)
+        
+        # Handle the response
+        if result:
+            operation = result.get('operation')
+            response = result.get('response')
+            requires_confirmation = result.get('requires_confirmation', False)
+            
+            # Add agent message to chat
+            if response:
+                self.add_chat_message('agent', response)
+            
+            # Handle confirmation required cases
+            if requires_confirmation:
+                # Store the pending note information in the NLP service
+                self.app_instance.nlp_service.conversation_state = {
+                    'operation': operation,
+                    'pending_note': result.get('pending_note')
+                }
+                return
+            
+            # If no confirmation required, refresh the display
+            if operation in ['create', 'update', 'delete']:
+                self.app_instance.nlp_service._save_notes()
+                self.refresh_notes_display()
+                
+                # Update graph if available
+                if hasattr(self, 'graph_widget'):
+                    self.graph_widget.update_graph(self.app_instance.nlp_service.notes)
+        else:
+            error_msg = (
+                "לא הצלחתי להבין את הבקשה שלך. אנא נסח הוראה ברורה." if is_hebrew
+                else "I couldn't understand your request. Please provide a clear instruction."
+            )
+            self.add_chat_message('agent', error_msg)
+
+    def create_sub_note(self, title):
+        """Create a sub-note under the current note context"""
+        if self.current_note_context:
+            parent_id = self.current_note_context.get('id')
+            result = self.app_instance.nlp_service.tools['create'].run({
+                'title': title,
+                'parent_id': parent_id,
+                'requires_confirmation': False
+            })
+            
+            # Add agent message to chat
+            if result and result.get('response'):
+                self.add_chat_message('agent', result['response'])
+            
+            # Refresh display if note was created
+            if result and result.get('operation') == 'create':
+                self.app_instance.nlp_service._save_notes()
+                self.refresh_notes_display()
+                
+                # Update graph if available
+                if hasattr(self, 'graph_widget'):
+                    self.graph_widget.update_graph(self.app_instance.nlp_service.notes)
+        else:
+            current_lang = self.app_instance.config_service.get_language()
+            is_hebrew = current_lang == 'he-IL'
+            error_msg = (
+                "אנא בחר רשומת אב תחילה" if is_hebrew
+                else "Please select a parent note first"
+            )
+            self.add_chat_message('agent', error_msg) 

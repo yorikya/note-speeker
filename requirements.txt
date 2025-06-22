@@ -1,4 +1,13 @@
-kivy>=2.0.0
-SpeechRecognition>=3.8.1
-PyAudio>=0.2.11
-buildozer>=1.4.0
+kivy>=2.2.1
+kivymd>=1.2.0
+python-bidi>=0.4.2
+google-generativeai>=0.3.2
+google-cloud-speech>=2.21.0
+google-cloud-texttospeech>=2.14.1
+sounddevice>=0.4.6
+soundfile>=0.12.1
+numpy>=1.24.3
+python-dotenv>=1.0.0
+requests>=2.31.0
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.13

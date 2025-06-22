@@ -7,6 +7,10 @@ from kivy.uix.screenmanager import ScreenManager
 from kivy.animation import Animation
 from kivy.core.text import LabelBase
 import platform
+from kivy.core.window import Window
+from kivy.metrics import dp
+from kivymd.app import MDApp
+from kivymd.theming import ThemeManager
 
 # Import our custom modules
 from app.widgets import SideMenu
@@ -16,6 +20,11 @@ from app.services.nlp_service import NLPService
 
 # Kivy requires minimum version
 kivy.require('2.0.0')
+
+# Set window size constraints
+Window.minimum_width = 800
+Window.minimum_height = 600
+Window.size = (1200, 800)
 
 # Register Hebrew-supporting fonts
 def register_hebrew_fonts():
@@ -62,17 +71,42 @@ def register_hebrew_fonts():
         return False
 
 
-class NoteSpeakerApp(App):
-    def build(self):
-        # Register Hebrew fonts first and store result
-        self.hebrew_font_available = register_hebrew_fonts()
+class NoteSpeakerApp(MDApp):
+    def __init__(self):
+        super().__init__()
+        self.theme_cls.theme_style = "Dark"
+        self.theme_cls.primary_palette = "Blue"
         
         # Initialize services
         self.config_service = ConfigService()
-        self.speech_service = SpeechService()
-        # Initialize NLPService with Gemini API key
-        GEMINI_API_KEY = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4"  # <-- Put your Gemini API key here
-        self.nlp_service = NLPService(api_key=GEMINI_API_KEY)
+        self.speech_service = SpeechService(self.config_service)
+        
+        # Get API key from config or environment
+        api_key = self.config_service.get('gemini_api_key', None)
+        if not api_key:
+            import os
+            api_key = os.getenv('GEMINI_API_KEY')
+            if api_key:
+                self.config_service.set('gemini_api_key', api_key)
+                self.config_service.save_config()
+        
+        self.nlp_service = NLPService(api_key=api_key)
+        
+        # Initialize screens
+        self.screen_manager = None
+        self.main_screen = None
+        self.settings_screen = None
+        self.about_screen = None
+        self.notes_screen = None
+        
+        # Set window size
+        Window.size = (1200, 800)
+        Window.minimum_width = 800
+        Window.minimum_height = 600
+
+    def build(self):
+        # Register Hebrew fonts first and store result
+        self.hebrew_font_available = register_hebrew_fonts()
         
         # Load saved language setting
         saved_language = self.config_service.get_language()
@@ -80,6 +114,10 @@ class NoteSpeakerApp(App):
         
         print(f"Loaded saved language: {saved_language}")
         print(f"Config file location: {self.config_service.config_file}")
+        
+        # Ensure notes are loaded
+        self.nlp_service.notes = self.nlp_service._load_notes()
+        print(f"[DEBUG] Loaded {len(self.nlp_service.notes)} notes at startup")
         
         # Create the main layout
         self.main_layout = FloatLayout()

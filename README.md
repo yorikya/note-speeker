@@ -348,3 +348,76 @@ For Android builds, Buildozer will automatically download:
 ## License
 
 MIT License - see LICENSE file for details.
+
+# Note Speaker
+
+A voice-controlled note-taking application with natural language processing capabilities.
+
+## Features
+
+- Voice-to-text note taking
+- Natural language processing for note management
+- Support for Hebrew and English
+- Interactive graph visualization of notes
+- Modern Material Design UI
+
+## Setup
+
+1. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Set up environment variables:
+   - Create a `.env` file in the project root
+   - Add your Gemini API key:
+     ```
+     GEMINI_API_KEY=your_api_key_here
+     ```
+   - Get your API key from: https://ai.google.dev/tutorials/setup
+
+3. Run the application:
+   ```bash
+   python main.py
+   ```
+
+## Usage
+
+1. Click the microphone button to start recording
+2. Speak your note or command
+3. The application will process your speech and:
+   - Create new notes
+   - Update existing notes
+   - Delete notes
+   - Find notes
+   - Show relationships between notes
+
+## Voice Commands
+
+Examples of voice commands:
+- "Create a new note about the meeting tomorrow"
+- "Add 'bring documents' to my meeting notes"
+- "Show me my shopping lists"
+- "Delete the old meeting notes"
+
+## Configuration
+
+The application supports the following environment variables:
+- `GEMINI_API_KEY`: Required for natural language processing
+- `SILENCE_TIMEOUT`: Time in seconds to wait for silence before stopping recording (default: 5)
+- `RECORDING_TIMEOUT`: Maximum recording time in seconds (default: 600)
+- `DEFAULT_LANGUAGE`: Default UI language (default: en-US)
+- `DEFAULT_SPEECH_LANGUAGE`: Default speech recognition language (default: en-US)
+
+## Development
+
+The application is built with:
+- Kivy for the UI framework
+- KivyMD for Material Design components
+- Google Cloud Speech-to-Text for voice recognition
+- Google Gemini for natural language processing
+- D3.js for graph visualization
+
+## License
+
+MIT License

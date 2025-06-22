@@ -10,9 +10,11 @@ class ConfigService:
         self.config_file = self._get_config_file_path()
         self.default_config = {
             'language': 'en-US',
+            'speech_language': 'en-US',
             'silence_timeout': 5,
             'recording_timeout': 600,  # 10 minutes in seconds
-            'theme': 'default'
+            'theme': 'default',
+            'gemini_api_key': None  # Will be populated from environment if available
         }
         self.config = self.load_config()
     
