@@ -2,6 +2,9 @@ import speech_recognition as sr
 import threading
 import time
 from kivy.clock import Clock
+from gtts import gTTS
+import os
+import subprocess
 
 
 class SpeechService:
@@ -147,6 +150,48 @@ class SpeechService:
         self.is_listening = False
         if self.listen_thread and self.listen_thread.is_alive():
             self.listen_thread.join(timeout=1)
+
+    def speak_text(self, text):
+        """Convert text to speech and play it based on the current language setting."""
+        print(f"[DEBUG TTS] speak_text called with text: '{text}'")
+        
+        lang_code_map = {
+            'he-IL': 'iw',  # Hebrew
+            'en-US': 'en',  # English
+        }
+        
+        gtts_lang = lang_code_map.get(self.current_language)
+        
+        if not gtts_lang:
+            print(f"[DEBUG TTS] TTS not supported for language: {self.current_language}")
+            return
+
+        try:
+            print("[DEBUG TTS] Generating speech with gTTS...")
+            # gTTS uses 'iw' for Hebrew
+            tts = gTTS(text=text, lang=gtts_lang)
+            # Use a temporary file to store the speech
+            temp_file = "temp_speech.mp3"
+            tts.save(temp_file)
+            print(f"[DEBUG TTS] Saved speech to {temp_file}")
+            
+            # Use afplay on macOS to play the audio with a timeout.
+            try:
+                print("[DEBUG TTS] Playing audio with subprocess...")
+                subprocess.run(["afplay", temp_file], timeout=10, check=True, capture_output=True)
+                print("[DEBUG TTS] Audio playback finished.")
+            except subprocess.TimeoutExpired:
+                print(f"[DEBUG TTS] TTS playback timed out for file: {temp_file}")
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                print(f"[DEBUG TTS] Error playing TTS file: {e}")
+            
+            # Clean up the temporary file
+            if os.path.exists(temp_file):
+                print(f"[DEBUG TTS] Removing temporary file: {temp_file}")
+                os.remove(temp_file)
+            
+        except Exception as e:
+            print(f"[DEBUG TTS] General error in TTS: {e}")
 
     def listen(self, language=None, silence_timeout=5):
         """Single-shot speech recognition function (legacy compatibility)"""

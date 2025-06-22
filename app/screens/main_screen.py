@@ -62,7 +62,7 @@ class MainScreen(Screen):
         menu_btn.bind(on_press=lambda x: self.app_instance.toggle_side_menu())
         
         # App title with modern typography
-        title_label = Label(
+        self.title_label = Label(
             text=self.get_app_title(),
             font_size='26sp',
             bold=True,
@@ -71,7 +71,7 @@ class MainScreen(Screen):
         )
         
         header_layout.add_widget(menu_btn)
-        header_layout.add_widget(title_label)
+        header_layout.add_widget(self.title_label)
         
         # Status display with card styling
         status_card = self.create_status_card()
@@ -248,7 +248,13 @@ class MainScreen(Screen):
 
         chat_container.add_widget(scroll)
 
-        card = BoxLayout(orientation='vertical')
+        # Card layout for notes
+        card = BoxLayout(
+            orientation='vertical',
+            size_hint_y=0.4,
+            padding=dp(10),
+            spacing=dp(10)
+        )
         card.add_widget(chat_title)
         card.add_widget(chat_container)
         return card
@@ -298,6 +304,7 @@ class MainScreen(Screen):
         self.stop_btn.disabled = True
         
         # Stop speech recognition
+        print("[DEBUG] stop_recording: Stopping speech service.")
         self.app_instance.speech_service.stop_listening()
     
     def fix_hebrew_display_direction(self, text):
@@ -384,340 +391,278 @@ class MainScreen(Screen):
         return message
 
     # Hebrew and English chat prefixes
-    HEBREW_USER_PREFIX = ':שמתשמ'
-    HEBREW_AGENT_PREFIX = ':ןכוס'
+    # HEBREW_USER_PREFIX = ':שמתשמ'
+    # HEBREW_AGENT_PREFIX = ':ןכוס'
+    HEBREW_USER_PREFIX = 'משתמש:'
+    HEBREW_AGENT_PREFIX = 'סוכן:'
     EN_USER_PREFIX = 'user:'
     EN_AGENT_PREFIX = 'agent:'
 
     def add_chat_message(self, sender, message):
-        # sender: 'user' or 'agent'
-        print(f"[DEBUG] add_chat_message: sender={sender}, original_message={message}")
+        """Add a message to the chat history with modern styling"""
+        # Determine prefix and alignment based on sender and language
         current_lang = self.app_instance.config_service.get_language()
-        if sender == 'user':
-            prefix = self.HEBREW_USER_PREFIX if current_lang.startswith('he') else self.EN_USER_PREFIX
+        is_hebrew = current_lang == 'he-IL'
+
+        if is_hebrew:
+            prefix = self.HEBREW_AGENT_PREFIX if sender == 'agent' else self.HEBREW_USER_PREFIX
         else:
-            prefix = self.HEBREW_AGENT_PREFIX if current_lang.startswith('he') else self.EN_AGENT_PREFIX
-        if current_lang == 'he-IL':
-            fixed_message = self.fix_hebrew_display_direction(message)
-            print(f"[DEBUG] add_chat_message: after fix_hebrew_display_direction: {fixed_message}")
-            display_text = fixed_message + ' ' + prefix
-            align = 'right'
+            prefix = self.EN_AGENT_PREFIX if sender == 'agent' else self.EN_USER_PREFIX
+
+        # Translate message if needed
+        original_message = message
+        if is_hebrew and sender == 'agent':
+            message = self.translate_agent_message(message, 'he-IL')
+
+
+        full_message = f"{prefix} {message}"
+
+        # Apply bidi algorithm for display
+        display_message = self.fix_hebrew_display_direction(full_message)
+
+        print(f"[DEBUG] add_chat_message: sender={sender}, original_message={original_message}")
+        if is_hebrew:
+            print(f"[DEBUG] add_chat_message: after fix_hebrew_display_direction: {display_message}")
+
+        # Choose font based on language
+        font_name = self.get_language_font()
+        print(f"[DEBUG] Displaying message: {display_message} with font: {font_name}")
+
+        # Create the chat message label
+        message_label = Label(
+            text=display_message,
+            font_name=font_name,
+            size_hint_y=None,
+            font_size='16sp',
+            padding=(dp(10), dp(10))
+        )
+
+        # Set text alignment and size properties
+        message_label.bind(width=lambda s, w: s.setter('text_size')(s, (w, None)))
+
+        # Add a background color to the message label for better readability
+        with message_label.canvas.before:
+            Color(0.25, 0.3, 0.4, 0.7 if sender == 'user' else 0.5)  # Different colors for user/agent
+            message_label.bg_rect = RoundedRectangle(
+                size=message_label.size, pos=message_label.pos, radius=[10]
+            )
+            message_label.bind(size=lambda instance, value: setattr(message_label.bg_rect, 'size', value))
+            message_label.bind(pos=lambda instance, value: setattr(message_label.bg_rect, 'pos', value))
+
+        # Create a container to handle the alignment of the message bubble
+        align_container = BoxLayout(
+            size_hint_y=None,
+            height=message_label.height
+        )
+        
+        # Align all messages based on language direction
+        if is_hebrew:
+            # Right-to-left alignment for Hebrew
+            message_label.halign = 'right'
+            align_container.add_widget(Widget())  # Spacer
+            align_container.add_widget(message_label)
         else:
-            fixed_message = message
-            display_text = prefix + ' ' + fixed_message
-            align = 'left'
-        color = (1, 1, 1, 1)
-        font_name = 'app/fonts/Alef-Regular.ttf'
-        if not os.path.exists(font_name):
-            print("[WARNING] Alef Regular font not found. Text may not display correctly.")
-        print(f"[DEBUG] Displaying message: {fixed_message} with font: {font_name}")
-        label_kwargs = {
-            "text": display_text,
-            "size_hint_y": None,
-            "height": 40,
-            "color": color,  # White text for high contrast
-            "halign": align,
-            "valign": 'middle',
-            "text_size": (self.chat_history.width - 40, None),
-            "padding": (10, 5),
-            "font_size": '20sp',
-            "font_name": font_name
-        }
-        msg_label = Label(**label_kwargs)
-        msg_label.canvas.before.clear()
-        with msg_label.canvas.before:
-            Color(0.7, 0.7, 0.7, 0.5)
-            Line(rectangle=(msg_label.x, msg_label.y, msg_label.width, msg_label.height), width=1.2)
-        self.chat_history.add_widget(msg_label)
-        # Scroll to the bottom
+            # Left-to-right alignment for English
+            message_label.halign = 'left'
+            align_container.add_widget(message_label)
+            align_container.add_widget(Widget())  # Spacer
+
+        self.chat_history.add_widget(align_container)
+
+        # Auto-scroll to the bottom
         self.chat_history.parent.scroll_y = 0
+
+        # Speak agent messages
+        if sender == 'agent':
+            # Run TTS in a separate thread to avoid blocking the UI
+            import threading
+            threading.Thread(
+                target=self.app_instance.speech_service.speak_text,
+                args=(message,),
+                daemon=True
+            ).start()
 
     def on_speech_result(self, text):
         """Handle speech recognition result with modern feedback"""
-        if text and text.strip():
-            try:
-                # Convert to proper Unicode if needed
-                if isinstance(text, bytes):
-                    text = text.decode('utf-8')
-                clean_text = text.strip()
-                current_lang = self.app_instance.config_service.get_language()
-                # Add user's message to chat
-                self.add_chat_message('user', clean_text)
-                # Use NLPService for natural language command processing
-                result = self.app_instance.nlp_service.process_command(clean_text, current_lang)
-                agent_msg = result.get("response", "")
-                # Always translate agent message if app is set to Hebrew
-                if current_lang == 'he-IL' or current_lang.startswith('he'):
-                    agent_msg = self.translate_agent_message(agent_msg, current_lang)
-                self.add_chat_message('agent', agent_msg)
-                self.status_label.text = agent_msg
-                # If needed, handle confirmation and listening logic as before
-                if result["operation"] == "confirm":
-                    self.app_instance.speech_service.start_listening(
-                        on_result=self.on_speech_result,
-                        on_error=self.on_speech_error,
-                        on_auto_stop=self.on_auto_stop
-                    )
-                elif result["operation"] == "find" and "matches" in result:
-                    notes = result["matches"]
-                    note_ids = {note['id'] for note in notes}
-                    
-                    # Also include any notes that are parents or children of the matched notes
-                    for note in notes:
-                        if note.get('parent_id'):
-                            note_ids.add(note['parent_id'])
-                        if note.get('children'):
-                            for child_id in note.get('children', []):
-                                note_ids.add(child_id)
-                    
-                    # Filter the main notes list
-                    filtered_notes = [note for note in self.app_instance.nlp_service.notes if note['id'] in note_ids]
-                    
-                    # Update the graph with the filtered notes
-                    if hasattr(self, 'graph_widget'):
-                        relations = self.app_instance.nlp_service.get_relations()
-                        self.graph_widget.set_data(filtered_notes, relations)
-                elif result["operation"] != "error":
-                    self.refresh_notes_display()
-            except Exception as e:
-                print(f"Error processing speech result: {e}")
-                self.status_label.text = f'Error processing text: {e}'
-        # Reset to listening state
-        Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 2)
-    
+        print(f"[DEBUG] on_speech_result: Recognized text: '{text}'")
+        self.status_label.text = f'Recognized: "{text[:50]}..."'
+        self.add_chat_message('user', text)  # Add user's speech to chat
+        
+        # Process the command through the NLP service
+        self.process_command(text)
+        
     def on_speech_error(self, error):
-        """Handle speech recognition error with modern feedback"""
-        self.status_label.text = f'Error: {error}'  # Remove emoji
-        
-        # Reset UI state
-        self.stop_recording(None)
-        
-        # Clear error after delay
-        Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 3)
-    
+        """Handle speech recognition error"""
+        self.status_label.text = f'Error: {error}'
+        self.stop_recording(None)  # Stop on error
+
     def on_auto_stop(self, reason):
-        """Handle automatic stop due to silence or recording timeout"""
-        self.status_label.text = f'Auto-stopped: {reason}'
-        
-        # Reset UI state
+        """Handle auto-stop event from speech service"""
+        self.status_label.text = f"Stopped: {reason}"
         self.stop_recording(None)
-        
-        # Clear message after delay
-        Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 3)
-    
+
     def clear_notes(self, instance):
-        """Clear all notes with modern confirmation"""
-        self.notes_text.text = ''
-        if hasattr(self, 'chat_history'):
-            self.chat_history.clear_widgets()  # Remove all chat messages from the chat UI
-        self.status_label.text = 'Notes cleared'
-        Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Ready to record'), 2)
-    
+        """Clear all notes and chat history"""
+        self.notes_text.text = ""
+        self.chat_history.clear_widgets()
+        self.status_label.text = 'Cleared all notes.'
+
     def test_hebrew_display(self):
-        """Test Hebrew text display"""
-        # Only add test text if Hebrew is configured
-        current_lang = self.app_instance.config_service.get_language()
+        """Function to test Hebrew text rendering"""
+        hebrew_text = "שלום עולם, זוהי בדיקה."
+        english_text = "Hello world, this is a test."
         
-        if current_lang == 'he-IL':
-            test_text = "שלום עולם - מערכת זיהוי דיבור"
-            print(f"Testing Hebrew display: {test_text}")
-        else:
-            test_text = "Hello World - Speech Recognition System"
-            print(f"Testing English display: {test_text}")
+        # Add Hebrew text
+        self.add_chat_message('user', hebrew_text)
+        self.add_chat_message('agent', hebrew_text)
         
-        # Add test text after a short delay to ensure UI is ready
+        # Add English text
+        self.add_chat_message('user', english_text)
+        self.add_chat_message('agent', english_text)
+
         def add_test_text(dt):
-            self.chat_history.text = f"[TEST] {test_text}\n\n"
-            self.notes_text.text = f"[TEST] {test_text}\n\n"
-        
+            self.notes_text.text += f"{hebrew_text}\n{english_text}\n"
         Clock.schedule_once(add_test_text, 1)
-    
+
     def on_enter(self):
-        """Called when entering the main screen"""
-        # Update title to reflect current language
-        if hasattr(self, 'children') and self.children:
-            # Find and update the title label
-            for child in self.children[0].children:
-                if hasattr(child, 'children') and len(child.children) > 1:
-                    title_widget = child.children[0]  # Title is the second widget (index 0 due to reverse order)
-                    if hasattr(title_widget, 'text'):
-                        title_widget.text = self.get_app_title()
-                        break
-        # Force refresh of app title in case language display name changed
-        if hasattr(self.app_instance, 'root_window') and self.app_instance.root_window is not None:
-            self.app_instance.root_window.title = self.get_app_title()
-        # Update notes font and alignment based on current language
-        self.update_notes_font()
-        # Refresh the display with current language formatting
+        """Called when the screen is displayed"""
+        # Load notes from NLPService
+        self.app_instance.nlp_service._load_notes()
+        
+        # Refresh graph and notes display
         self.refresh_notes_display()
-    
+        
+        # Update UI components based on language
+        self.update_notes_font()
+        
+        # Update app title
+        self.title_label.text = self.get_app_title()
+
     def refresh_notes_display(self):
-        """Refresh the notes display based on current language"""
-        if hasattr(self, 'notes_text') and hasattr(self, 'chat_history'):
-            current_text = self.notes_text.text
-            current_lang = self.app_instance.config_service.get_language()
-            
-            if current_lang == 'he-IL' and current_text:
-                # Apply Hebrew direction fix
-                display_text = self.fix_hebrew_display_direction(current_text)
-                self.chat_history.text = display_text
-            else:
-                # Use text as-is for non-Hebrew languages
-                self.chat_history.text = current_text
-    
+        """Refresh notes display from NLPService"""
+        notes = self.app_instance.nlp_service.notes
+        relations = self.app_instance.nlp_service.get_relations()
+        
+        # Update graph widget
+        self.graph_widget.set_data(notes, relations)
+        
+        # Update chat history (if needed, or just clear)
+        # self.chat_history.clear_widgets() # Decide if you want to clear chat on refresh
+
     def get_language_font(self):
-        """Get the appropriate font for the current language"""
-        import os
-        font_path = 'app/fonts/Alef-Regular.ttf'
-        if os.path.exists(font_path):
-            print(f"Using Alef Regular font: {font_path}")
-            return font_path
-        print("[WARNING] Alef Regular font not found, using system default.")
-        return None
-    
-    def get_text_alignment(self):
-        """Get the appropriate text alignment for the current language"""
+        """Get the appropriate font based on the current language"""
         current_lang = self.app_instance.config_service.get_language()
-        
         if current_lang == 'he-IL':
-            return 'left'  # Use left alignment for consistent display
+            return 'app/fonts/Alef-Regular.ttf'
+        # Default font for English and other languages
+        return 'app/fonts/NotoSans-Regular.ttf'
+
+    def get_text_alignment(self, sender):
+        """Get text alignment based on language and sender"""
+        current_lang = self.app_instance.config_service.get_language()
+        if current_lang == 'he-IL':
+            # For Hebrew (RTL), agent is on the right, user on the left
+            return 'right' if sender == 'agent' else 'left'
         else:
-            return 'left'  # English is LTR
-    
+            # For English (LTR), user is on the right, agent on the left
+            return 'right' if sender == 'user' else 'left'
+
     def update_notes_font(self):
-        """Update the notes display font based on current language"""
-        if hasattr(self, 'chat_history'):
-            font_name = self.get_language_font()
-            if font_name:  # Only set font_name if it's not None
-                self.chat_history.font_name = font_name
-            # TextInput doesn't have halign, so skip that
-    
+        """Update font for all relevant widgets"""
+        font_name = self.get_language_font()
+        self.status_label.font_name = font_name
+        # Update chat labels if they exist
+        for child in self.chat_history.children:
+            if isinstance(child, Label):
+                child.font_name = font_name
+
     def format_timestamp(self):
-        """Create a simple timestamp using only basic ASCII numbers and colon"""
-        from datetime import datetime
-        now = datetime.now()
-        
-        # Get hour and minute
-        hour = now.hour
-        minute = now.minute
-        
-        # Convert to individual digits
-        hour_tens = hour // 10
-        hour_ones = hour % 10
-        minute_tens = minute // 10
-        minute_ones = minute % 10
-        
-        # Build timestamp character by character using basic ASCII
-        timestamp = str(hour_tens) + str(hour_ones) + str(minute_tens) + str(minute_ones)
-        
-        # Insert colon manually
-        result = timestamp[0] + timestamp[1] + ":" + timestamp[2] + timestamp[3]
-        
-        return result 
+        """Format the current time as a timestamp"""
+        import datetime
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def fix_hebrew_quotes(self, text, lang):
-        if lang.startswith("he"):
-            # Replace standard double quotes with Hebrew gershayim
-            text = text.replace('"', '״')
-        return text 
+        """Fix quotes for Hebrew NLP processing"""
+        if lang == 'he-IL':
+            return text.replace('"', '')
+        return text
 
     def fetch_note_by_id(self, note_id):
         # Helper to fetch a note by id from NLPService notes
-        for note in self.app_instance.nlp_service.notes:
-            if note.get('id') == note_id:
-                return note
-        return None 
+        return self.app_instance.nlp_service.get_note_by_id(note_id)
 
     def get_language(self):
-        return self.app_instance.config_service.get_language() 
+        return self.app_instance.config_service.get_language()
 
     def update_note_context(self, note):
-        """Update the current note context and status line"""
+        """Update the current note context."""
         self.current_note_context = note
         if note:
-            status_text = f"Selected note: {self.fix_hebrew_display_direction(note['title'])}"
+            self.status_label.text = f"Context: {note.get('title', 'N/A')}"
         else:
-            status_text = "Ready to record"
-        self.status_label.text = status_text
-        
+            self.status_label.text = "Context cleared"
+
     def process_command(self, command_text):
-        """Process a command from speech recognition"""
-        if not command_text:
-            return
-            
-        # Get current language
-        current_lang = self.app_instance.config_service.get_language()
-        is_hebrew = current_lang == 'he-IL'
+        """Process a command using the NLPService and update the UI."""
         
-        # Add user message to chat
-        self.add_chat_message('user', command_text)
+        # Fix quotes for hebrew
+        fixed_command = self.fix_hebrew_quotes(
+            command_text,
+            self.get_language()
+        )
         
-        # Process command through NLP service
-        result = self.app_instance.nlp_service.process_command(command_text, current_lang)
+        response = self.app_instance.nlp_service.process_command(
+            fixed_command,
+            language=self.get_language()
+        )
+        print(f"[DEBUG] NLP Response: {response}")
         
-        # Handle the response
-        if result:
-            operation = result.get('operation')
-            response = result.get('response')
-            requires_confirmation = result.get('requires_confirmation', False)
+        # Add agent's response to chat
+        if response.get("response"):
+            self.add_chat_message('agent', response["response"])
+        
+        # Handle notes update
+        if response.get("notes_updated"):
+            # Fetch all notes to display
+            all_notes = self.app_instance.nlp_service.notes
+            relations = self.app_instance.nlp_service.get_relations()
             
-            # Add agent message to chat
-            if response:
-                self.add_chat_message('agent', response)
-            
-            # Handle confirmation required cases
-            if requires_confirmation:
-                # Store the pending note information in the NLP service
-                self.app_instance.nlp_service.conversation_state = {
-                    'operation': operation,
-                    'pending_note': result.get('pending_note')
-                }
-                return
-            
-            # If no confirmation required, refresh the display
-            if operation in ['create', 'update', 'delete']:
-                self.app_instance.nlp_service._save_notes()
-                self.refresh_notes_display()
+            # If the command found specific notes, show only them and their connections
+            found_notes_data = response.get("found_notes")
+            if found_notes_data:
                 
-                # Update graph if available
-                if hasattr(self, 'graph_widget'):
-                    relations = self.app_instance.nlp_service.get_relations()
-                    self.graph_widget.set_data(self.app_instance.nlp_service.notes, relations)
+                # Create a set of IDs to display: found notes, their parents, and their children
+                found_ids = {note['id'] for note in found_notes_data}
+                display_ids = set(found_ids)
+                
+                for note_id in found_ids:
+                    note = self.fetch_note_by_id(note_id)
+                    if note:
+                        if note.get('parent_id'):
+                            display_ids.add(note['parent_id'])
+                        if note.get('children'):
+                            display_ids.update(note.get('children'))
+
+                # Filter the notes and relations to only include the ones to be displayed
+                notes_to_display = [note for note in all_notes if note['id'] in display_ids]
+                self.graph_widget.set_data(notes_to_display, relations)
+            else:
+                # Otherwise, display the full graph
+                self.graph_widget.set_data(all_notes, relations)
+
+        # Stop listening unless confirmation is required
+        if not response.get("requires_confirmation"):
+            print("[DEBUG] Confirmation not required. Stopping recording.")
+            self.stop_recording(None)
         else:
-            error_msg = (
-                "לא הצלחתי להבין את הבקשה שלך. אנא נסח הוראה ברורה." if is_hebrew
-                else "I couldn't understand your request. Please provide a clear instruction."
-            )
-            self.add_chat_message('agent', error_msg)
+            print("[DEBUG] Confirmation required. Keeping microphone open.")
 
     def create_sub_note(self, title):
-        """Create a sub-note under the current note context"""
-        if self.current_note_context:
-            parent_id = self.current_note_context.get('id')
-            result = self.app_instance.nlp_service.tools['create'].run({
-                'title': title,
-                'parent_id': parent_id,
-                'requires_confirmation': False
-            })
-            
-            # Add agent message to chat
-            if result and result.get('response'):
-                self.add_chat_message('agent', result['response'])
-            
-            # Refresh display if note was created
-            if result and result.get('operation') == 'create':
-                self.app_instance.nlp_service._save_notes()
-                self.refresh_notes_display()
-                
-                # Update graph if available
-                if hasattr(self, 'graph_widget'):
-                    relations = self.app_instance.nlp_service.get_relations()
-                    self.graph_widget.set_data(self.app_instance.nlp_service.notes, relations)
-        else:
-            current_lang = self.app_instance.config_service.get_language()
-            is_hebrew = current_lang == 'he-IL'
-            error_msg = (
-                "אנא בחר רשומת אב תחילה" if is_hebrew
-                else "Please select a parent note first"
-            )
-            self.add_chat_message('agent', error_msg) 
+        """Create a sub-note under the current context."""
+        if not self.current_note_context:
+            self.add_chat_message('agent', "Please select a parent note first.")
+            return
+
+        parent_id = self.current_note_context['id']
+        command = f"create a note titled '{title}' as a child of '{parent_id}'"
+        self.process_command(command) 

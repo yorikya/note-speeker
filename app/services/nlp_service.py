@@ -343,177 +343,103 @@ The JSON must be in this exact format:
             print(f"[DEBUG] Error saving notes: {e}")
 
     def get_relations(self) -> List[Dict]:
+        """Get relationships between notes for graph visualization."""
         relations = []
         for note in self.notes:
-            note_id = note.get('id')
-            if not note_id:
-                continue
-
-            # Process parent-child relationships
-            if 'children' in note and note['children']:
-                for child_id in note['children']:
-                    relations.append({'source': note_id, 'target': child_id, 'type': 'child'})
-            
-            # Process explicit relations
-            if 'relations' in note and isinstance(note['relations'], dict):
-                for rel_type, target_id in note['relations'].items():
-                    relations.append({'source': note_id, 'target': target_id, 'type': rel_type})
-
+            if note.get("parent_id"):
+                relations.append({"source": note["parent_id"], "target": note["id"]})
         return relations
 
     def process_command(self, text: str, language: str = 'en') -> Dict:
-        """Process a natural language command"""
-        if not self.model:
-            return {
-                "operation": "error",
-                "response": "Gemini API key not configured. Please set the GEMINI_API_KEY environment variable."
-            }
+        """
+        Process a user's command by selecting the right tool and executing it.
+        This version supports multi-turn conversations for confirmations.
+        """
+        print(f"[DEBUG NLP] Processing command: '{text}', lang: {language}")
+
+        # Check if we are in a confirmation state
+        if self.conversation_state:
+            print(f"[DEBUG NLP] In conversation state: {self.conversation_state}")
+            is_hebrew = language == 'he-IL'
             
-        try:
-            # Handle confirmation responses
-            if self.conversation_state:
-                print(f"[DEBUG] Current conversation state: {self.conversation_state}")
-                # Check for confirmation in both English and Hebrew
-                confirmation_words = {'yes', 'yeah', 'sure', 'ok', 'okay', 'כן', 'בסדר', 'אישור', 'אוקיי', 'כ'}
-                rejection_words = {'no', 'nope', 'לא', 'לו'}
+            # User affirmation
+            is_yes = (is_hebrew and "כן" in text) or (not is_hebrew and "yes" in text.lower())
+            
+            if is_yes:
+                print("[DEBUG NLP] User confirmed.")
+                # Get the pending operation and note details
+                operation = self.conversation_state.get("operation")
+                pending_note = self.conversation_state.get("pending_note")
                 
-                # Clean up the text for comparison
-                cleaned_text = text.lower().strip().replace('.', '').replace('!', '')
+                # Clear the confirmation requirement and re-run the tool
+                pending_note["requires_confirmation"] = False
                 
-                # Check if this is a confirmation
-                is_confirmation = any(word in cleaned_text for word in confirmation_words)
-                is_rejection = any(word in cleaned_text for word in rejection_words)
+                # Re-run the original tool with confirmation granted
+                tool = self.tools.get(operation)
+                if tool:
+                    result = tool.run(pending_note)
+                    result["notes_updated"] = True
+                else:
+                    result = {"response": "Error: Tool not found."}
                 
-                print(f"[DEBUG] Cleaned text: '{cleaned_text}', is_confirmation: {is_confirmation}, is_rejection: {is_rejection}")
-                
-                if is_confirmation or is_rejection:
-                    print(f"[DEBUG] Processing {'confirmation' if is_confirmation else 'rejection'}")
-                    
-                    if is_rejection:
-                        self.conversation_state = None
-                        return {
-                            "operation": "cancelled",
-                            "response": "בוטל." if language == 'he-IL' else "Cancelled."
-                        }
-                    
-                    operation = self.conversation_state.get('operation')
-                    pending_note = self.conversation_state.get('pending_note')
-                    
-                    print(f"[DEBUG] Operation: {operation}, Pending note: {pending_note}")
-                    
-                    if operation == 'create' and pending_note:
-                        # Create the new note
-                        new_note = {
-                            "id": str(len(self.notes) + 1),
-                            "title": pending_note["title"],
-                            "description": pending_note.get("description", ""),
-                            "parent_id": pending_note.get("parent_id"),
-                            "children": [],
-                            "done": False,
-                            "done_date": None,
-                            "relations": {},
-                            "links": [],
-                            "tags": []
-                        }
-                        print(f"[DEBUG] Creating new note: {new_note}")
-                        self.notes.append(new_note)
-                        
-                        # Update parent's children list if parent_id is specified
-                        if pending_note.get("parent_id"):
-                            parent = next((n for n in self.notes if n["id"] == pending_note["parent_id"]), None)
-                            if parent:
-                                parent["children"].append(new_note["id"])
-                                print(f"[DEBUG] Updated parent note {parent['title']} with new child")
-                        
-                        self._save_notes()
-                        self.conversation_state = None
-                        
-                        response = (
-                            f'נוצרה רשומה: {pending_note["title"]}' if language == 'he-IL'
-                            else f'Created note: {pending_note["title"]}'
-                        )
-                        return {
-                            "operation": "create",
-                            "response": response,
-                            "requires_confirmation": False
-                        }
-                    
-                    print("[DEBUG] No valid operation or pending note found in conversation state")
-                    self.conversation_state = None
-                    return {
-                        "operation": "error",
-                        "response": "אין רשומה ממתינה לאישור." if language == 'he-IL' else "No pending note to confirm."
-                    }
-                
-                # If not a confirmation or rejection, clear the state and process as new command
-                print("[DEBUG] Not a confirmation/rejection response, clearing state")
+                # Clear the conversation state
                 self.conversation_state = None
-            
-            # Process command with Gemini
-            prompt = f"{self.tool_selection_prompt}\nUser command: {text}"
-            response = self.model.generate_content(prompt)
-            print(f"[DEBUG] Gemini raw response: {response.text}")
-            
-            # Clean up response text - remove markdown code blocks
-            response_text = response.text.strip()
-            if response_text.startswith("```"):
-                response_text = response_text.split("\n", 1)[1]
-            if response_text.endswith("```"):
-                response_text = response_text.rsplit("\n", 1)[0]
-            if response_text.startswith("json\n"):
-                response_text = response_text[5:]
-            response_text = response_text.strip()
-            
-            # Parse the response
-            try:
-                result = json.loads(response_text)
-            except json.JSONDecodeError as e:
-                print(f"[DEBUG] Error parsing Gemini response: {response_text}")
-                print(f"[DEBUG] JSON parse error: {e}")
-                return {
-                    "operation": "error",
-                    "response": "Sorry, I couldn't understand how to process that command."
-                }
                 
-            # Get the selected tool
-            tool_name = result.get("tool", "unknown")
-            if tool_name == "unknown":
-                return {
-                    "operation": "error",
-                    "response": "I'm not sure how to help with that. Could you rephrase your request?"
-                }
-                
-            # Run the tool
-            tool = self.tools.get(tool_name)
-            if not tool:
-                return {
-                    "operation": "error",
-                    "response": f"Tool '{tool_name}' not found."
-                }
-                
-            # Execute the tool with parameters
-            tool_result = tool.run(result.get("params", {}))
-            
-            # If confirmation is required, store the state
-            if tool_result.get("requires_confirmation", False):
-                print(f"[DEBUG] Storing conversation state: {tool_result}")
-                self.conversation_state = {
-                    'operation': tool_result.get('operation'),
-                    'pending_note': tool_result.get('pending_note')
+            else:  # User denied
+                print("[DEBUG NLP] User denied.")
+                self.conversation_state = None  # Clear state
+                result = {
+                    "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
                 }
             
-            # Save notes if the operation was successful and doesn't require confirmation
-            if not tool_result.get("requires_confirmation", False) and tool_result.get("operation") not in ["error", "find"]:
-                self._save_notes()
-                
-            return tool_result
+            print(f"[DEBUG NLP] Result after confirmation: {result}")
+            return result
+
+        # If not in a conversation, proceed with tool selection
+        try:
+            print("[DEBUG NLP] Performing tool selection via Gemini...")
+            response = self.model.generate_content(self.tool_selection_prompt + text)
             
+            # Extract the tool call from the response
+            tool_call_match = re.search(r"```json\s*(\{.*?\})\s*```", response.text, re.DOTALL)
+            
+            if tool_call_match:
+                tool_call_str = tool_call_match.group(1)
+                print(f"[DEBUG NLP] Extracted tool call: {tool_call_str}")
+                tool_call = json.loads(tool_call_str)
+                
+                tool_name = tool_call.get("tool")
+                params = tool_call.get("params", {})
+                params["original_text"] = text  # Pass original text for context
+                
+                if tool_name in self.tools:
+                    print(f"[DEBUG NLP] Executing tool: '{tool_name}' with params: {params}")
+                    result = self.tools[tool_name].run(params)
+                    
+                    # If the tool requires confirmation, save the state
+                    if result.get("requires_confirmation"):
+                        self.conversation_state = {
+                            "operation": tool_name,
+                            "pending_note": params
+                        }
+                        print(f"[DEBUG NLP] Stored conversation state for confirmation: {self.conversation_state}")
+                    else:
+                        result["notes_updated"] = True  # Mark that notes were changed
+                else:
+                    print(f"[DEBUG NLP] Tool '{tool_name}' not found.")
+                    result = {"response": "I'm not sure how to do that."}
+            else:
+                print("[DEBUG NLP] No tool call found in Gemini response.")
+                result = {"response": response.text}
+
         except Exception as e:
-            print(f"[DEBUG] Error processing command: {e}")
-            return {
-                "operation": "error",
-                "response": f"Error processing command: {e}"
+            print(f"[DEBUG NLP] Error during NLP processing: {e}")
+            result = {
+                "response": "I had trouble understanding that. Please try again."
             }
+        
+        print(f"[DEBUG NLP] Final result: {result}")
+        return result
 
     def _migrate_notes_if_needed(self):
         """Migrate notes from old location (project root) to new location (~/.note_speaker)"""

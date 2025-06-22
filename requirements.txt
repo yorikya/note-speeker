@@ -11,3 +11,7 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 SpeechRecognition>=3.10.0
 PyAudio>=0.2.13
+kivy-deps.angle==0.3.0
+kivy-deps.glew==0.3.0
+kivy-deps.sdl2==0.3.1
+gTTS==2.5.4
