@@ -83,7 +83,13 @@ class MainScreen(Screen):
         notes_card = self.create_notes_card()
         
         # --- Visualization section ---
-        vis_section = BoxLayout(orientation='vertical', size_hint_y=0.6)
+        vis_section = BoxLayout(orientation='vertical', size_hint_y=0.6, padding=dp(10), spacing=dp(10))
+        with vis_section.canvas.before:
+            Color(0.15, 0.2, 0.3, 0.9)  # Darker card background
+            self.vis_bg = RoundedRectangle(size=vis_section.size, pos=vis_section.pos, radius=[15])
+            vis_section.bind(size=lambda instance, value: setattr(self.vis_bg, 'size', value))
+            vis_section.bind(pos=lambda instance, value: setattr(self.vis_bg, 'pos', value))
+
         vis_section.add_widget(Label(
             text="Query and Visualization",
             size_hint_y=None,
@@ -91,7 +97,7 @@ class MainScreen(Screen):
             font_size='20sp'
         ))
         
-        # Create graph widget with WebView
+        # Create graph widget
         self.graph_widget = NoteGraphWidget(size_hint=(1, 1))
         vis_section.add_widget(self.graph_widget)
         
@@ -454,12 +460,23 @@ class MainScreen(Screen):
                     )
                 elif result["operation"] == "find" and "matches" in result:
                     notes = result["matches"]
-                    relations = []
+                    note_ids = {note['id'] for note in notes}
+                    
+                    # Also include any notes that are parents or children of the matched notes
                     for note in notes:
-                        if "relations" in note:
-                            for rel_id in note["relations"]:
-                                relations.append((note["id"], rel_id))
-                    self.graph_widget.set_data(notes, relations)
+                        if note.get('parent_id'):
+                            note_ids.add(note['parent_id'])
+                        if note.get('children'):
+                            for child_id in note.get('children', []):
+                                note_ids.add(child_id)
+                    
+                    # Filter the main notes list
+                    filtered_notes = [note for note in self.app_instance.nlp_service.notes if note['id'] in note_ids]
+                    
+                    # Update the graph with the filtered notes
+                    if hasattr(self, 'graph_widget'):
+                        relations = self.app_instance.nlp_service.get_relations()
+                        self.graph_widget.set_data(filtered_notes, relations)
                 elif result["operation"] != "error":
                     self.refresh_notes_display()
             except Exception as e:
@@ -664,7 +681,8 @@ class MainScreen(Screen):
                 
                 # Update graph if available
                 if hasattr(self, 'graph_widget'):
-                    self.graph_widget.update_graph(self.app_instance.nlp_service.notes)
+                    relations = self.app_instance.nlp_service.get_relations()
+                    self.graph_widget.set_data(self.app_instance.nlp_service.notes, relations)
         else:
             error_msg = (
                 "לא הצלחתי להבין את הבקשה שלך. אנא נסח הוראה ברורה." if is_hebrew
@@ -693,7 +711,8 @@ class MainScreen(Screen):
                 
                 # Update graph if available
                 if hasattr(self, 'graph_widget'):
-                    self.graph_widget.update_graph(self.app_instance.nlp_service.notes)
+                    relations = self.app_instance.nlp_service.get_relations()
+                    self.graph_widget.set_data(self.app_instance.nlp_service.notes, relations)
         else:
             current_lang = self.app_instance.config_service.get_language()
             is_hebrew = current_lang == 'he-IL'

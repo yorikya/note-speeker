@@ -1,313 +1,175 @@
+"""A widget to display a graph of notes."""
+import math
+import arabic_reshaper
+from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.label import Label
+from kivy.graphics import Line, Color, Rectangle, Ellipse
+from kivy.core.window import Window
+from bidi.algorithm import get_display
 from kivy.uix.widget import Widget
 from kivy.metrics import dp
-from kivy.core.window import Window
-from kivy.uix.boxlayout import BoxLayout
-from kivymd.uix.card import MDCard
-from kivy.uix.label import Label
-import json
-import os
-import tempfile
-import webbrowser
-from bidi.algorithm import get_display
-from kivy.clock import Clock
-from kivy.lang import Builder
 
-Builder.load_string('''
-<NoteGraphWidget>:
-    orientation: 'vertical'
-    MDCard:
-        id: web_container
-        size_hint: 1, 1
-        md_bg_color: 0, 0, 0, 0
-        radius: [15, 15, 15, 15]
-        padding: dp(10)
-        BoxLayout:
-            orientation: 'vertical'
-            spacing: dp(10)
-            MDLabel:
-                text: "Graph Visualization"
-                halign: "center"
-                size_hint_y: None
-                height: dp(40)
-            MDRaisedButton:
-                text: "Open Graph in Browser"
-                pos_hint: {'center_x': .5}
-                on_release: root.open_graph()
-            Widget:
-                size_hint_y: 0.8
-''')
 
-class NoteGraphWidget(BoxLayout):
+class NoteNode(RelativeLayout):
+    """Widget for a single node in the graph."""
+    def __init__(self, note_data, **kwargs):
+        super().__init__(**kwargs)
+        self.note_data = note_data
+        self.size_hint = (None, None)
+        self.size = (100, 100) # Circle: width and height should be equal
+
+        title = self.note_data.get('title', 'No Title')
+        
+        # Manually add newlines to control wrapping, then apply bidi.
+        # This ensures correct display inside the constrained circle.
+        title_with_newlines = title.replace(' ', '\n')
+        reshaped_text = arabic_reshaper.reshape(title_with_newlines)
+        display_title = get_display(reshaped_text)
+
+        self.label = Label(
+            text=display_title,
+            size_hint=(None, None),
+            color=(1, 1, 1, 1),
+            halign='center',
+            valign='middle',
+            font_name='app/fonts/Alef-Regular.ttf',
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        self.label.bind(
+            width=lambda *x: self.label.setter('text_size')(self.label, (self.width - dp(20), None)),
+            texture_size=lambda *x: self.label.setter('size')(self.label, x[1])
+        )
+        self.add_widget(self.label)
+
+        with self.canvas.before:
+            Color(0.2, 0.6, 0.9, 1)
+            self.rect = Ellipse(size=self.size, pos=(0,0))
+            Color(0.5, 0.7, 1, 1)  # Border color
+            self.border = Line(ellipse=(0, 0, self.width, self.height), width=1.5)
+
+        self.bind(size=self.update_graphics)
+
+    def update_graphics(self, *args):
+        self.rect.size = self.size
+        self.border.ellipse = (0, 0, self.width, self.height)
+
+
+class Tooltip(Label):
+    """Tooltip label."""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.selected_note = None
-        self.node_positions = []
-        self.html_file = None
-        
-        # Create HTML template
-        self.html_template = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {
-                    margin: 0;
-                    overflow: hidden;
-                    background: #1a1a1a;
-                    font-family: 'Alef', sans-serif;
-                }
-                #graph {
-                    width: 100vw;
-                    height: 100vh;
-                }
-                .node {
-                    cursor: pointer;
-                }
-                .node circle {
-                    fill: #3366cc;
-                    stroke: #fff;
-                    stroke-width: 2px;
-                }
-                .node.selected circle {
-                    stroke: #4CAF50;
-                    stroke-width: 3px;
-                }
-                .node text {
-                    font-size: 14px;
-                    fill: white;
-                    text-anchor: middle;
-                    dominant-baseline: middle;
-                }
-                .link {
-                    fill: none;
-                    stroke: #666;
-                    stroke-width: 2px;
-                }
-                .tooltip {
-                    position: absolute;
-                    padding: 8px;
-                    background: rgba(0, 0, 0, 0.8);
-                    color: white;
-                    border-radius: 6px;
-                    font-size: 14px;
-                    pointer-events: none;
-                    z-index: 1000;
-                    direction: rtl;
-                }
-            </style>
-            <script src="https://d3js.org/d3.v7.min.js"></script>
-        </head>
-        <body>
-            <div id="graph"></div>
-            <script>
-                const data = DATA_PLACEHOLDER;
-                
-                let svg = d3.select("#graph")
-                    .append("svg")
-                    .attr("width", "100%")
-                    .attr("height", "100%");
-                    
-                let g = svg.append("g");
-                
-                // Add zoom behavior
-                let zoom = d3.zoom()
-                    .scaleExtent([0.1, 4])
-                    .on("zoom", (event) => {
-                        g.attr("transform", event.transform);
-                    });
-                    
-                svg.call(zoom);
-                
-                function updateGraph(data) {
-                    // Clear existing graph
-                    g.selectAll("*").remove();
-                    
-                    if (!data || !data.nodes || !data.links) return;
-                    
-                    let simulation = d3.forceSimulation(data.nodes)
-                        .force("link", d3.forceLink(data.links).id(d => d.id).distance(100))
-                        .force("charge", d3.forceManyBody().strength(-300))
-                        .force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2));
-                    
-                    // Draw links
-                    let link = g.append("g")
-                        .selectAll("path")
-                        .data(data.links)
-                        .enter().append("path")
-                        .attr("class", "link")
-                        .attr("marker-end", "url(#arrowhead)");
-                    
-                    // Add arrowhead marker
-                    svg.append("defs").append("marker")
-                        .attr("id", "arrowhead")
-                        .attr("viewBox", "0 -5 10 10")
-                        .attr("refX", 20)
-                        .attr("refY", 0)
-                        .attr("markerWidth", 6)
-                        .attr("markerHeight", 6)
-                        .attr("orient", "auto")
-                        .append("path")
-                        .attr("d", "M0,-5L10,0L0,5")
-                        .attr("fill", "#666");
-                    
-                    // Draw nodes
-                    let node = g.append("g")
-                        .selectAll(".node")
-                        .data(data.nodes)
-                        .enter().append("g")
-                        .attr("class", "node")
-                        .call(d3.drag()
-                            .on("start", dragstarted)
-                            .on("drag", dragged)
-                            .on("end", dragended));
-                    
-                    // Add circles to nodes
-                    node.append("circle")
-                        .attr("r", 30);
-                    
-                    // Add text to nodes
-                    node.append("text")
-                        .text(d => d.title);
-                    
-                    // Add tooltips
-                    let tooltip = d3.select("body").append("div")
-                        .attr("class", "tooltip")
-                        .style("opacity", 0);
-                    
-                    node.on("mouseover", function(event, d) {
-                        tooltip.transition()
-                            .duration(200)
-                            .style("opacity", .9);
-                        tooltip.html(createTooltipContent(d))
-                            .style("left", (event.pageX + 10) + "px")
-                            .style("top", (event.pageY - 10) + "px");
-                    })
-                    .on("mouseout", function(d) {
-                        tooltip.transition()
-                            .duration(500)
-                            .style("opacity", 0);
-                    })
-                    .on("click", function(event, d) {
-                        // Store selected node ID in localStorage
-                        localStorage.setItem('selectedNodeId', d.id);
-                    });
-                    
-                    simulation.on("tick", () => {
-                        link.attr("d", d => {
-                            let dx = d.target.x - d.source.x,
-                                dy = d.target.y - d.source.y,
-                                dr = Math.sqrt(dx * dx + dy * dy);
-                            return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
-                        });
-                        
-                        node.attr("transform", d => `translate(${d.x},${d.y})`);
-                    });
-                    
-                    function dragstarted(event) {
-                        if (!event.active) simulation.alphaTarget(0.3).restart();
-                        event.subject.fx = event.subject.x;
-                        event.subject.fy = event.subject.y;
-                    }
-                    
-                    function dragged(event) {
-                        event.subject.fx = event.x;
-                        event.subject.fy = event.y;
-                    }
-                    
-                    function dragended(event) {
-                        if (!event.active) simulation.alphaTarget(0);
-                        event.subject.fx = null;
-                        event.subject.fy = null;
-                    }
-                }
-                
-                function createTooltipContent(note) {
-                    let content = `<div>`;
-                    content += `<strong>${note.title}</strong><br>`;
-                    if (note.description) content += `${note.description}<br>`;
-                    if (note.children && note.children.length) {
-                        content += `Sub-tasks: ${note.children.length}<br>`;
-                    }
-                    content += `</div>`;
-                    return content;
-                }
-                
-                // Initialize graph with data
-                updateGraph(data);
-            </script>
-        </body>
-        </html>
-        """
-        
+        self.size_hint = (None, None)
+        self.color = (1, 1, 1, 1)
+        self.font_name = 'app/fonts/Alef-Regular.ttf'  # Font for Hebrew
+        with self.canvas.before:
+            Color(0, 0, 0, 0.8)
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+        self.bind(pos=self.update_rect, size=self.update_rect)
+
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+    def set_text(self, text):
+        reshaped_text = arabic_reshaper.reshape(text)
+        display_text = get_display(reshaped_text)
+        self.text = display_text
+        self.texture_update()
+        if self.texture_size:
+            self.size = (self.texture_size[0] + dp(20), self.texture_size[1] + dp(10))
+
+
+class NoteGraphWidget(RelativeLayout):
+    """A widget for visualizing notes as a graph."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.nodes = {}
+        self.links = []
+        self.node_widgets = {}
+        self._tooltip = None
+        Window.bind(mouse_pos=self.on_mouse_pos)
+        self.bind(size=self.draw_graph, pos=self.draw_graph)
+
     def set_data(self, notes, relations=None):
-        """Convert notes and relations to D3.js format and update the graph"""
+        """Set the data for the graph."""
+        self.nodes.clear()
+        self.links.clear()
+
         if not notes:
+            self.draw_graph()
             return
-            
-        # Prepare data for D3.js
-        nodes = []
-        links = []
-        
-        # Add nodes
+
         for note in notes:
-            nodes.append({
-                'id': note['id'],
-                'title': self.fix_hebrew_display_direction(note.get('title', '')),
-                'description': self.fix_hebrew_display_direction(note.get('description', '')),
-                'children': note.get('children', [])
-            })
-            
-        # Add links from relations and children
-        for note in notes:
-            # Add relations
-            if note.get('relations'):
-                for rel_type, target_id in note['relations'].items():
-                    links.append({
-                        'source': note['id'],
-                        'target': target_id,
-                        'type': rel_type
-                    })
-            
-            # Add children links
-            if note.get('children'):
-                for child_id in note['children']:
-                    links.append({
-                        'source': note['id'],
-                        'target': child_id,
-                        'type': 'child'
-                    })
+            self.nodes[note['id']] = note
+
+        if relations:
+            self.links = relations
         
-        # Create data object
-        data = {'nodes': nodes, 'links': links}
+        self.draw_graph()
+
+    def draw_graph(self, *args):
+        """Draw the graph on the widget's canvas."""
+        self.clear_widgets()
+        self.node_widgets.clear()
         
-        # Create temporary HTML file
-        if self.html_file:
-            try:
-                os.unlink(self.html_file)
-            except:
-                pass
+        if not self.nodes:
+            return
+
+        center_x = self.width / 2
+        center_y = self.height / 2
+        radius = min(self.width, self.height) / 3 if min(self.width, self.height) > 0 else 100
             
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
-            html_content = self.html_template.replace('DATA_PLACEHOLDER', json.dumps(data))
-            f.write(html_content)
-            self.html_file = f.name
-            
-    def open_graph(self, *args):
-        """Open the graph visualization in the default web browser"""
-        if self.html_file and os.path.exists(self.html_file):
-            webbrowser.open('file://' + self.html_file)
-            
-    def fix_hebrew_display_direction(self, text):
-        """Fix Hebrew text direction for display"""
-        if text is None:
-            return ""
-        return get_display(str(text))
+        angle_step = (2 * math.pi) / len(self.nodes) if len(self.nodes) > 0 else 0
+
+        positions = {}
+        node_ids = list(self.nodes.keys())
+        for i, node_id in enumerate(node_ids):
+            angle = i * angle_step
+            x = center_x + radius * math.cos(angle)
+            y = center_y + radius * math.sin(angle)
+            positions[node_id] = (x, y)
+
+        # Create a widget to draw links on, and add it first so it's in the background
+        links_widget = Widget()
+        with links_widget.canvas:
+            Color(0.5, 0.5, 0.5, 1)
+            for link in self.links:
+                source_pos = positions.get(link['source'])
+                target_pos = positions.get(link['target'])
+                if source_pos and target_pos:
+                    Line(points=[source_pos[0], source_pos[1],
+                                target_pos[0], target_pos[1]], width=1.5)
+        self.add_widget(links_widget)
+
+        for node_id, pos in positions.items():
+            node_widget = NoteNode(
+                note_data=self.nodes[node_id],
+                pos=(pos[0] - 50, pos[1] - 50) # Center the circle
+            )
+            self.add_widget(node_widget)
+            self.node_widgets[node_id] = node_widget
+
+    def on_mouse_pos(self, *args):
+        """Handle mouse movement for tooltips."""
+        pos = args[1]
         
-    def on_parent(self, instance, parent):
-        """Clean up temporary files when widget is removed"""
-        if not parent and self.html_file:
-            try:
-                os.unlink(self.html_file)
-            except:
-                pass 
+        if self._tooltip and self._tooltip.parent:
+            self.remove_widget(self._tooltip)
+        self._tooltip = None
+
+        if self.parent: # Ensure the widget is attached to a parent
+            widget_pos = self.to_widget(*pos, relative=True)
+            for node_id, node_widget in self.node_widgets.items():
+                if node_widget.collide_point(*widget_pos):
+                    node_data = self.nodes.get(node_id, {})
+                    
+                    title = node_data.get('title', '')
+                    desc = node_data.get('description', '')
+                    tooltip_text = f"Title: {title}"
+                    if desc:
+                        tooltip_text += f"\nDescription: {desc}"
+                    
+                    self._tooltip = Tooltip(pos=widget_pos)
+                    self.add_widget(self._tooltip)
+                    self._tooltip.set_text(tooltip_text)
+                    break

@@ -342,6 +342,25 @@ The JSON must be in this exact format:
         except Exception as e:
             print(f"[DEBUG] Error saving notes: {e}")
 
+    def get_relations(self) -> List[Dict]:
+        relations = []
+        for note in self.notes:
+            note_id = note.get('id')
+            if not note_id:
+                continue
+
+            # Process parent-child relationships
+            if 'children' in note and note['children']:
+                for child_id in note['children']:
+                    relations.append({'source': note_id, 'target': child_id, 'type': 'child'})
+            
+            # Process explicit relations
+            if 'relations' in note and isinstance(note['relations'], dict):
+                for rel_type, target_id in note['relations'].items():
+                    relations.append({'source': note_id, 'target': target_id, 'type': rel_type})
+
+        return relations
+
     def process_command(self, text: str, language: str = 'en') -> Dict:
         """Process a natural language command"""
         if not self.model:
