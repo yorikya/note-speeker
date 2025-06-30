@@ -418,6 +418,17 @@ The application is built with:
 - Google Gemini for natural language processing
 - D3.js for graph visualization
 
+# User / Agent conversation 
+`
+1. משתמש: תמצא רשימת קניות
+2. סוכן: נמצאו רשומה 1
+3. סוכן: האם תירצה לעדכן או למחוק רשומה?
+4. משתמש: כן תעדכן את התוכן - רשומה זאת משמשת לשמור רשימת קניות שבועית
+5. סוכן: לעדכן תוכן של רשימת קניות ל - רשומה זאת משמשת לשמור רשימת קניות שבועית
+6. משתמש: כן
+7. סוכן: התוכן של רשימת קניות עודכן
+`
+
 ## License
 
 MIT License

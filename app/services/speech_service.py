@@ -22,15 +22,13 @@ class SpeechService:
     def __init__(self, config_service=None):
         self.config_service = config_service
         self.recognizer = sr.Recognizer()
-        # Get default language from config or use fallback
-        self.current_language = (config_service.get('speech_language', 'en-US') 
-                               if config_service else "en-US")
+        self.current_language = (config_service.get('speech_language', 'en-US') if config_service else "en-US")
         self.is_listening = False
         self.listen_thread = None
         self.stop_listening_flag = False
-        
         # Configure recognizer for better performance
-        self.recognizer.energy_threshold = 300
+        self.energy_threshold = config_service.get('energy_threshold', 100) if config_service else 100
+        self.recognizer.energy_threshold = self.energy_threshold
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 0.8
         self.recognizer.operation_timeout = None
@@ -65,7 +63,7 @@ class SpeechService:
             """Continuous listening function with timeout management"""
             start_time = time.time()
             last_speech_time = start_time
-            
+            print("[DEBUG SR] Entered listen_continuously thread.")
             try:
                 with sr.Microphone() as source:
                     print(f"Starting continuous listening in {self.current_language}...")
@@ -75,64 +73,66 @@ class SpeechService:
                     
                     while not self.stop_listening_flag:
                         current_time = time.time()
-                        
+                        # Print current energy threshold for debugging
+                        print(f"[DEBUG SR] Current energy_threshold: {self.recognizer.energy_threshold}")
                         # Check for total recording timeout (10 minutes default)
                         if current_time - start_time > recording_timeout:
                             print(f"Auto-stopping: Recording timeout ({recording_timeout}s) reached")
                             if on_auto_stop:
                                 Clock.schedule_once(lambda dt: on_auto_stop("Recording timeout reached"), 0)
                             break
-                        
                         # Check for silence timeout
                         if current_time - last_speech_time > silence_timeout:
                             print(f"Auto-stopping: Silence timeout ({silence_timeout}s) reached")
                             if on_auto_stop:
                                 Clock.schedule_once(lambda dt: on_auto_stop("Silence timeout reached"), 0)
                             break
-                        
                         try:
                             # Listen for audio with a shorter timeout for responsiveness
+                            print("[DEBUG SR] Listening for audio...")
                             audio = self.recognizer.listen(
                                 source, 
                                 timeout=1,  # Check every second for timeouts
                                 phrase_time_limit=15
                             )
-                            
+                            print("[DEBUG SR] Audio received, recognizing...")
+                            print(f"[DEBUG SR] Audio duration: {getattr(audio, 'duration_seconds', 'N/A')} seconds")
                             if self.stop_listening_flag:
                                 break
-                                
                             # Recognize speech
                             text = self.recognizer.recognize_google(
                                 audio, 
                                 language=self.current_language
                             )
-                            
+                            print(f"[DEBUG SR] Recognized text: {text}")
                             if text.strip():
                                 # Update last speech time when we get actual speech
                                 last_speech_time = time.time()
                                 if on_result:
+                                    print("[DEBUG SR] Calling on_result callback...")
                                     Clock.schedule_once(lambda dt: on_result(text.strip()), 0)
-                                
                         except sr.WaitTimeoutError:
-                            # Timeout is normal, continue listening (but don't reset speech timer)
+                            print("[DEBUG SR] WaitTimeoutError: No speech detected in timeout window.")
                             continue
                         except sr.UnknownValueError:
-                            # Could not understand audio (but there was audio, so reset timer)
+                            print("[DEBUG SR] UnknownValueError: Could not understand audio.")
                             last_speech_time = time.time()
                             continue
                         except sr.RequestError as e:
                             error_msg = f"Recognition service error: {e}"
+                            print(f"[DEBUG SR] RequestError: {error_msg}")
                             if on_error:
                                 Clock.schedule_once(lambda dt: on_error(error_msg), 0)
                             break
                         except Exception as e:
                             error_msg = f"Unexpected error: {e}"
+                            print(f"[DEBUG SR] Exception: {error_msg}")
                             if on_error:
                                 Clock.schedule_once(lambda dt: on_error(error_msg), 0)
                             break
-                            
             except Exception as e:
                 error_msg = f"Microphone error: {e}"
+                print(f"[DEBUG SR] Outer Exception: {error_msg}")
                 if on_error:
                     Clock.schedule_once(lambda dt: on_error(error_msg), 0)
             finally:
@@ -218,4 +218,14 @@ class SpeechService:
             return ""
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return "" 
+            return ""
+
+    def set_energy_threshold(self, value):
+        self.energy_threshold = value
+        self.recognizer.energy_threshold = value
+        if self.config_service:
+            self.config_service.set('energy_threshold', value)
+            self.config_service.save_config()
+
+    def get_energy_level(self):
+        return self.recognizer.energy_threshold 

@@ -44,83 +44,161 @@ class MainScreen(Screen):
     
     def setup_ui(self):
         """Set up the main screen UI with modern styling"""
-        main_layout = BoxLayout(orientation='vertical', spacing=dp(20), padding=dp(25))
-        
-        # Header with modern styling
-        header_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(80))
-        
-        # Menu button with modern styling
+        main_layout = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+
+        # --- Header with side menu, title, and compact controls ---
+        header_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(10))
+
+        # Menu button
         menu_btn = Button(
             text='☰',
             size_hint=(None, 1),
-            width=dp(60),
-            font_size='24sp',
-            background_color=(0.2, 0.6, 1.0, 1),  # Modern blue
+            width=dp(40),
+            font_size='20sp',
+            background_color=(0.2, 0.6, 1.0, 1),
             color=(1, 1, 1, 1),
             bold=True
         )
         menu_btn.bind(on_press=lambda x: self.app_instance.toggle_side_menu())
-        
-        # App title with modern typography
+
+        # App title
         self.title_label = Label(
             text=self.get_app_title(),
-            font_size='26sp',
+            font_size='20sp',
             bold=True,
-            color=(1, 1, 1, 1),  # White text
-            # Remove font_name to use default system font which supports Hebrew
+            color=(1, 1, 1, 1),
+            size_hint_x=0.5,
+            halign='left',
+            valign='middle'
         )
-        
+        self.title_label.bind(size=self.title_label.setter('text_size'))
+
+        # Compact control buttons
+        self.record_btn = Button(
+            text='Start',
+            size_hint=(None, 1),
+            width=dp(90),
+            height=dp(40),
+            font_size='14sp',
+            background_color=(0.2, 0.8, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True
+        )
+        self.record_btn.bind(on_press=self.toggle_recording)
+        self.stop_btn = Button(
+            text='Stop',
+            size_hint=(None, 1),
+            width=dp(90),
+            height=dp(40),
+            font_size='14sp',
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            disabled=True,
+            bold=True
+        )
+        self.stop_btn.bind(on_press=self.stop_recording)
+        clear_btn = Button(
+            text='Clear',
+            size_hint=(None, 1),
+            width=dp(90),
+            height=dp(40),
+            font_size='14sp',
+            background_color=(0.6, 0.4, 0.8, 1),
+            color=(1, 1, 1, 1),
+            bold=True
+        )
+        clear_btn.bind(on_press=self.clear_notes)
+
         header_layout.add_widget(menu_btn)
         header_layout.add_widget(self.title_label)
-        
-        # Status display with card styling
-        status_card = self.create_status_card()
-        
-        # Control buttons with modern styling
-        control_card = self.create_control_card()
-        
-        # Notes display with modern styling
-        notes_card = self.create_notes_card()
-        
-        # --- Visualization section ---
-        vis_section = BoxLayout(orientation='vertical', size_hint_y=0.6, padding=dp(10), spacing=dp(10))
+        header_layout.add_widget(self.record_btn)
+        header_layout.add_widget(self.stop_btn)
+        header_layout.add_widget(clear_btn)
+
+        # --- Visualization section (top, 55%) ---
+        vis_section = BoxLayout(orientation='vertical', size_hint_y=0.55, padding=dp(5), spacing=dp(5))
         with vis_section.canvas.before:
-            Color(0.15, 0.2, 0.3, 0.9)  # Darker card background
+            Color(0.15, 0.2, 0.3, 0.9)
             self.vis_bg = RoundedRectangle(size=vis_section.size, pos=vis_section.pos, radius=[15])
             vis_section.bind(size=lambda instance, value: setattr(self.vis_bg, 'size', value))
             vis_section.bind(pos=lambda instance, value: setattr(self.vis_bg, 'pos', value))
-
         vis_section.add_widget(Label(
             text="Query and Visualization",
             size_hint_y=None,
-            height=dp(40),
-            font_size='20sp'
+            height=dp(30),
+            font_size='16sp'
         ))
-        
-        # Create graph widget inside a ScrollView
         graph_scroll = ScrollView(size_hint=(1, 1), do_scroll_x=True, do_scroll_y=True)
-        self.graph_widget = NoteGraphWidget(size_hint=(None, None), size=(1200, 800))
+        self.graph_widget = NoteGraphWidget(size_hint=(None, None), size=(1600, 1000))
         graph_scroll.add_widget(self.graph_widget)
         vis_section.add_widget(graph_scroll)
-        
+
+        # --- Chat section (bottom, 45%) ---
+        chat_section = BoxLayout(orientation='vertical', size_hint_y=0.45, padding=dp(5), spacing=dp(5))
+        chat_title = Label(
+            text='Chat',
+            font_size='16sp',
+            color=(1, 1, 1, 1),
+            bold=True,
+            halign='left',
+            size_hint_y=None,
+            height=dp(30)
+        )
+        chat_title.text_size = (None, None)
+        chat_container = BoxLayout(orientation='vertical', size_hint_y=1, padding=dp(4))
+        with chat_container.canvas.before:
+            Color(0.2, 0.25, 0.35, 0.9)
+            chat_container.bg = RoundedRectangle(size=chat_container.size, pos=chat_container.pos, radius=[15])
+            Color(0.5, 0.7, 1, 1)
+            chat_container.border = Line(rounded_rectangle=[chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15], width=2)
+            chat_container.bind(size=lambda instance, value: (setattr(chat_container.bg, 'size', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])),
+                                 pos=lambda instance, value: (setattr(chat_container.bg, 'pos', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])))
+        scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
+        self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None, spacing=0)
+        self.chat_history.bind(minimum_height=self.chat_history.setter('height'))
+        scroll.add_widget(self.chat_history)
+        self.notes_text = TextInput(
+            text='',
+            multiline=True,
+            opacity=0,
+            readonly=True
+        )
+        chat_container.add_widget(scroll)
+        chat_section.add_widget(chat_title)
+        chat_section.add_widget(chat_container)
+
+        # --- Assemble main layout ---
         main_layout.add_widget(header_layout)
-        main_layout.add_widget(status_card)
-        main_layout.add_widget(control_card)
         main_layout.add_widget(vis_section)
-        main_layout.add_widget(notes_card)
-        
-        # Add status line at the bottom
+        main_layout.add_widget(chat_section)
+
+        # Only keep the status at the bottom
+        status_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(30))
         self.status_label = Label(
             text="Ready to record",
-            size_hint=(1, None),
-            height=dp(30),
+            size_hint=(0.7, 1),
             halign='right',
             valign='middle',
             font_name='app/fonts/Alef-Regular.ttf'
         )
         self.status_label.bind(size=self.status_label.setter('text_size'))
-        main_layout.add_widget(self.status_label)
-        
+        self.energy_label = Label(
+            text="Energy: ...",
+            size_hint=(0.3, 1),
+            halign='left',
+            valign='middle',
+            font_name='app/fonts/Alef-Regular.ttf'
+        )
+        self.energy_label.bind(size=self.energy_label.setter('text_size'))
+        status_layout.add_widget(self.status_label)
+        status_layout.add_widget(self.energy_label)
+        main_layout.add_widget(status_layout)
+        # Schedule energy label update
+        def update_energy_label(dt):
+            energy = self.app_instance.speech_service.get_energy_level()
+            self.energy_label.text = f"Energy: {energy:.1f}"
+        Clock.schedule_interval(update_energy_label, 1)
+
         self.add_widget(main_layout)
         
         # Test Hebrew display - comment out for now
@@ -235,6 +313,7 @@ class MainScreen(Screen):
             chat_container.bind(size=lambda instance, value: (setattr(chat_container.bg, 'size', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])),
                                  pos=lambda instance, value: (setattr(chat_container.bg, 'pos', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])))
 
+        # Replace ScrollView with DebugScrollView for debugging
         scroll = ScrollView()
         self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None, spacing=0)
         self.chat_history.bind(minimum_height=self.chat_history.setter('height'))
@@ -253,9 +332,10 @@ class MainScreen(Screen):
         # Card layout for notes
         card = BoxLayout(
             orientation='vertical',
-            size_hint_y=0.75,
-            padding=dp(10),
-            spacing=dp(10)
+            size_hint_y=None,
+            height=dp(500),  # Increased height for 7+ lines
+            padding=dp(5),   # Reduced padding
+            spacing=dp(5)    # Reduced spacing
         )
         card.add_widget(chat_title)
         card.add_widget(chat_container)
@@ -280,15 +360,14 @@ class MainScreen(Screen):
     
     def start_recording(self):
         """Start recording with modern UI updates"""
-        self.status_label.text = 'Listening...'  # Remove emoji
-        self.record_btn.text = 'Recording...'  # Remove emoji
-        self.record_btn.background_color = (0.9, 0.3, 0.3, 1)  # Red when recording
+        self.status_label.text = 'Listening...'
+        self.record_btn.text = 'Recording...'
+        self.record_btn.background_color = (0.9, 0.3, 0.3, 1)
         self.stop_btn.disabled = False
-        
         # Get timeout settings from config
         silence_timeout = self.app_instance.config_service.get_silence_timeout()
         recording_timeout = self.app_instance.config_service.get_recording_timeout()
-        
+        print(f"[DEBUG] start_recording: silence_timeout={silence_timeout}, recording_timeout={recording_timeout}")
         # Start speech recognition with auto-stop features
         self.app_instance.speech_service.start_listening(
             on_result=self.on_speech_result,
@@ -375,7 +454,18 @@ class MainScreen(Screen):
             "no": "לא",
             "Found 1 note": "נמצאה רשומה אחת",
             "Found ": "נמצאו ",
-            " notes": " רשומות"
+            " notes": " רשומות",
+            # New for update/delete/sub-note flow:
+            "Found 1 note. Would you like to update, delete, or add a sub-note?": "נמצאה רשומה אחת. האם תרצה לעדכן, למחוק או להוסיף תת-רשומה?",
+            "Would you like to update, delete, or add a sub-note?": "האם תרצה לעדכן, למחוק או להוסיף תת-רשומה?",
+            "Add a sub-note called": "להוסיף תת-רשומה בשם",
+            "under": "תחת",
+            "Please specify if you want to update, delete, or add a sub-note, or confirm/cancel.": "אנא ציין אם ברצונך לעדכן, למחוק או להוסיף תת-רשומה, או אשר/בטל.",
+            "Content updated": "התוכן עודכן",
+            "OK, I've cancelled the action.": "בסדר, ביטלתי את הפעולה.",
+            "Deleted note:": "הרשומה נמחקה:",
+            "Updating content of": "מעדכן את התוכן של",
+            "was updated.": "עודכן.",
         }
         if lang == 'he-IL' or (lang and lang.startswith('he')):
             # Special handling for 'Found X notes'
@@ -400,7 +490,7 @@ class MainScreen(Screen):
     EN_USER_PREFIX = 'user:'
     EN_AGENT_PREFIX = 'agent:'
 
-    def add_chat_message(self, sender, message):
+    def add_chat_message(self, sender, message, requires_confirmation=False):
         """Add a message to the chat history with modern styling"""
         # Determine prefix and alignment based on sender and language
         current_lang = self.app_instance.config_service.get_language()
@@ -481,13 +571,19 @@ class MainScreen(Screen):
 
         # Speak agent messages
         if sender == 'agent':
-            # Run TTS in a separate thread to avoid blocking the UI
+            # Stop microphone before TTS
+            print("[DEBUG] Stopping microphone before TTS playback.")
+            self.app_instance.speech_service.stop_listening()
+            def tts_and_resume():
+                self.app_instance.speech_service.speak_text(message)
+                # Resume listening if confirmation is required
+                if requires_confirmation:
+                    import time
+                    time.sleep(0.5)  # Add a short delay to allow audio device to reset
+                    print("[DEBUG] Resuming microphone after TTS playback (confirmation required, with delay).")
+                    self.start_recording()
             import threading
-            threading.Thread(
-                target=self.app_instance.speech_service.speak_text,
-                args=(message,),
-                daemon=True
-            ).start()
+            threading.Thread(target=tts_and_resume, daemon=True).start()
 
     def on_speech_result(self, text):
         """Handle speech recognition result with modern feedback"""
@@ -552,7 +648,9 @@ class MainScreen(Screen):
         """Refresh notes display from NLPService"""
         notes = self.app_instance.nlp_service.notes
         relations = self.app_instance.nlp_service.get_relations()
-        
+        print("[DEBUG] refresh_notes_display: Visualizing notes:")
+        for note in notes:
+            print(f"  ID: {note.get('id')}, Title: {note.get('title')}")
         # Update graph widget
         self.graph_widget.set_data(notes, relations)
         
@@ -629,7 +727,7 @@ class MainScreen(Screen):
         
         # Add agent's response to chat
         if response.get("response"):
-            self.add_chat_message('agent', response["response"])
+            self.add_chat_message('agent', response["response"], requires_confirmation=response.get("requires_confirmation", False))
         
         # Only update visualization if a search was performed and found_notes is present
         found_notes_data = response.get("found_notes") or response.get("matches")
@@ -641,7 +739,7 @@ class MainScreen(Screen):
             found_ids = {note['id'] for note in found_notes_data}
             display_ids = set(found_ids)
 
-            # Add parents and children
+            # Add parents and children (only direct)
             for note_id in list(found_ids):
                 note = all_notes_by_id.get(note_id)
                 if note:
@@ -653,8 +751,9 @@ class MainScreen(Screen):
                         if child_id in all_notes_by_id:
                             display_ids.add(child_id)
 
+            # Only show notes that are in display_ids
             notes_to_display = [note for note in all_notes if note['id'] in display_ids]
-            # Optionally, filter relations to only those between displayed notes
+            # Only show relations between displayed notes
             filtered_relations = [
                 rel for rel in relations
                 if rel['source'] in display_ids and rel['target'] in display_ids
@@ -672,8 +771,10 @@ class MainScreen(Screen):
             for rel in filtered_relations:
                 print(f"  Source: {rel['source']}, Target: {rel['target']}")
             print("===============================")
-        # Do NOT update the graph for other commands (creation, etc.)
-
+        # Always refresh notes display if notes were updated (created, updated, deleted)
+        if response.get("notes_updated"):
+            print("[DEBUG] notes_updated detected in response, refreshing notes display.")
+            self.refresh_notes_display()
         # Stop listening unless confirmation is required
         if not response.get("requires_confirmation"):
             print("[DEBUG] Confirmation not required. Stopping recording.")

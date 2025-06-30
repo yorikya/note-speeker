@@ -111,16 +111,12 @@ class NoteGraphWidget(RelativeLayout):
         """Draw the graph on the widget's canvas."""
         self.clear_widgets()
         self.node_widgets.clear()
-        
         if not self.nodes:
             return
-
         center_x = self.width / 2
         center_y = self.height / 2
         radius = min(self.width, self.height) / 3 if min(self.width, self.height) > 0 else 100
-            
         angle_step = (2 * math.pi) / len(self.nodes) if len(self.nodes) > 0 else 0
-
         positions = {}
         node_ids = list(self.nodes.keys())
         for i, node_id in enumerate(node_ids):
@@ -128,8 +124,7 @@ class NoteGraphWidget(RelativeLayout):
             x = center_x + radius * math.cos(angle)
             y = center_y + radius * math.sin(angle)
             positions[node_id] = (x, y)
-
-        # Create a widget to draw links on, and add it first so it's in the background
+        # Draw links (lines) first
         links_widget = Widget()
         with links_widget.canvas:
             Color(0.5, 0.5, 0.5, 1)
@@ -137,27 +132,9 @@ class NoteGraphWidget(RelativeLayout):
                 source_pos = positions.get(link['source'])
                 target_pos = positions.get(link['target'])
                 if source_pos and target_pos:
-                    # Draw the main line
-                    Line(points=[source_pos[0], source_pos[1],
-                                target_pos[0], target_pos[1]], width=1.5)
-                    # Draw arrowhead at the target (child)
-                    # Arrow size and angle
-                    arrow_length = 18
-                    arrow_angle = math.radians(25)
-                    dx = target_pos[0] - source_pos[0]
-                    dy = target_pos[1] - source_pos[1]
-                    angle = math.atan2(dy, dx)
-                    # Left side of arrow
-                    left_x = target_pos[0] - arrow_length * math.cos(angle - arrow_angle)
-                    left_y = target_pos[1] - arrow_length * math.sin(angle - arrow_angle)
-                    # Right side of arrow
-                    right_x = target_pos[0] - arrow_length * math.cos(angle + arrow_angle)
-                    right_y = target_pos[1] - arrow_length * math.sin(angle + arrow_angle)
-                    # Draw the two sides of the arrowhead
-                    Line(points=[target_pos[0], target_pos[1], left_x, left_y], width=1.5)
-                    Line(points=[target_pos[0], target_pos[1], right_x, right_y], width=1.5)
+                    Line(points=[source_pos[0], source_pos[1], target_pos[0], target_pos[1]], width=2.5)
         self.add_widget(links_widget)
-
+        # Draw nodes
         for node_id, pos in positions.items():
             node_widget = NoteNode(
                 note_data=self.nodes[node_id],
@@ -165,6 +142,27 @@ class NoteGraphWidget(RelativeLayout):
             )
             self.add_widget(node_widget)
             self.node_widgets[node_id] = node_widget
+        # Draw arrowheads on top
+        arrow_widget = Widget()
+        with arrow_widget.canvas:
+            for link in self.links:
+                source_pos = positions.get(link['source'])
+                target_pos = positions.get(link['target'])
+                if source_pos and target_pos:
+                    # Draw arrowhead at the target (child)
+                    Color(1, 1, 1, 1)  # White arrowhead
+                    arrow_length = 28
+                    arrow_angle = math.radians(25)
+                    dx = target_pos[0] - source_pos[0]
+                    dy = target_pos[1] - source_pos[1]
+                    angle = math.atan2(dy, dx)
+                    left_x = target_pos[0] - arrow_length * math.cos(angle - arrow_angle)
+                    left_y = target_pos[1] - arrow_length * math.sin(angle - arrow_angle)
+                    right_x = target_pos[0] - arrow_length * math.cos(angle + arrow_angle)
+                    right_y = target_pos[1] - arrow_length * math.sin(angle + arrow_angle)
+                    Line(points=[target_pos[0], target_pos[1], left_x, left_y], width=3)
+                    Line(points=[target_pos[0], target_pos[1], right_x, right_y], width=3)
+        self.add_widget(arrow_widget)
 
     def on_mouse_pos(self, *args):
         """Handle mouse movement for tooltips."""
