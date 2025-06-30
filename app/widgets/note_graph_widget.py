@@ -137,8 +137,25 @@ class NoteGraphWidget(RelativeLayout):
                 source_pos = positions.get(link['source'])
                 target_pos = positions.get(link['target'])
                 if source_pos and target_pos:
+                    # Draw the main line
                     Line(points=[source_pos[0], source_pos[1],
                                 target_pos[0], target_pos[1]], width=1.5)
+                    # Draw arrowhead at the target (child)
+                    # Arrow size and angle
+                    arrow_length = 18
+                    arrow_angle = math.radians(25)
+                    dx = target_pos[0] - source_pos[0]
+                    dy = target_pos[1] - source_pos[1]
+                    angle = math.atan2(dy, dx)
+                    # Left side of arrow
+                    left_x = target_pos[0] - arrow_length * math.cos(angle - arrow_angle)
+                    left_y = target_pos[1] - arrow_length * math.sin(angle - arrow_angle)
+                    # Right side of arrow
+                    right_x = target_pos[0] - arrow_length * math.cos(angle + arrow_angle)
+                    right_y = target_pos[1] - arrow_length * math.sin(angle + arrow_angle)
+                    # Draw the two sides of the arrowhead
+                    Line(points=[target_pos[0], target_pos[1], left_x, left_y], width=1.5)
+                    Line(points=[target_pos[0], target_pos[1], right_x, right_y], width=1.5)
         self.add_widget(links_widget)
 
         for node_id, pos in positions.items():
@@ -163,11 +180,22 @@ class NoteGraphWidget(RelativeLayout):
                 if node_widget.collide_point(*widget_pos):
                     node_data = self.nodes.get(node_id, {})
                     
-                    title = node_data.get('title', '')
+                    # Build tooltip text with more fields
+                    tooltip_lines = [f"Title: {node_data.get('title', '')}"]
+                    tooltip_lines.append(f"ID: {node_data.get('id', '')}")
                     desc = node_data.get('description', '')
-                    tooltip_text = f"Title: {title}"
                     if desc:
-                        tooltip_text += f"\nDescription: {desc}"
+                        tooltip_lines.append(f"Description: {desc}")
+                    done_date = node_data.get('done_date', None)
+                    if done_date:
+                        tooltip_lines.append(f"Done date: {done_date}")
+                    links = node_data.get('links', [])
+                    if links:
+                        tooltip_lines.append(f"Links: {links}")
+                    tags = node_data.get('tags', [])
+                    if tags:
+                        tooltip_lines.append(f"Tags: {tags}")
+                    tooltip_text = "\n".join(tooltip_lines)
                     
                     self._tooltip = Tooltip(pos=widget_pos)
                     self.add_widget(self._tooltip)

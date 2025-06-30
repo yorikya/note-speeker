@@ -97,9 +97,11 @@ class MainScreen(Screen):
             font_size='20sp'
         ))
         
-        # Create graph widget
-        self.graph_widget = NoteGraphWidget(size_hint=(1, 1))
-        vis_section.add_widget(self.graph_widget)
+        # Create graph widget inside a ScrollView
+        graph_scroll = ScrollView(size_hint=(1, 1), do_scroll_x=True, do_scroll_y=True)
+        self.graph_widget = NoteGraphWidget(size_hint=(None, None), size=(1200, 800))
+        graph_scroll.add_widget(self.graph_widget)
+        vis_section.add_widget(graph_scroll)
         
         main_layout.add_widget(header_layout)
         main_layout.add_widget(status_card)
@@ -234,7 +236,7 @@ class MainScreen(Screen):
                                  pos=lambda instance, value: (setattr(chat_container.bg, 'pos', value), setattr(chat_container.border, 'points', [chat_container.x, chat_container.y, chat_container.x+chat_container.width, chat_container.y, chat_container.x+chat_container.width, chat_container.y+chat_container.height, chat_container.x, chat_container.y+chat_container.height, chat_container.x, chat_container.y]), setattr(chat_container.border, 'rounded_rectangle', [chat_container.x, chat_container.y, chat_container.width, chat_container.height, 15])))
 
         scroll = ScrollView()
-        self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None)
+        self.chat_history = BoxLayout(orientation='vertical', size_hint_y=None, spacing=0)
         self.chat_history.bind(minimum_height=self.chat_history.setter('height'))
         scroll.add_widget(self.chat_history)
 
@@ -251,7 +253,7 @@ class MainScreen(Screen):
         # Card layout for notes
         card = BoxLayout(
             orientation='vertical',
-            size_hint_y=0.4,
+            size_hint_y=0.75,
             padding=dp(10),
             spacing=dp(10)
         )
@@ -414,7 +416,6 @@ class MainScreen(Screen):
         if is_hebrew and sender == 'agent':
             message = self.translate_agent_message(message, 'he-IL')
 
-
         full_message = f"{prefix} {message}"
 
         # Apply bidi algorithm for display
@@ -428,13 +429,19 @@ class MainScreen(Screen):
         font_name = self.get_language_font()
         print(f"[DEBUG] Displaying message: {display_message} with font: {font_name}")
 
-        # Create the chat message label
+        # Set background color based on sender
+        if sender == 'user':
+            bubble_color = (0.22, 0.32, 0.45, 0.92)  # Muted blue for user
+        else:
+            bubble_color = (0.28, 0.45, 0.32, 0.92)  # Muted green for agent
+
+        # Create the chat message label with reduced padding
         message_label = Label(
             text=display_message,
             font_name=font_name,
             size_hint_y=None,
             font_size='16sp',
-            padding=(dp(10), dp(10))
+            padding=(dp(2), dp(2))  # Further reduced padding for compactness
         )
 
         # Set text alignment and size properties
@@ -442,7 +449,7 @@ class MainScreen(Screen):
 
         # Add a background color to the message label for better readability
         with message_label.canvas.before:
-            Color(0.25, 0.3, 0.4, 0.7 if sender == 'user' else 0.5)  # Different colors for user/agent
+            Color(*bubble_color)
             message_label.bg_rect = RoundedRectangle(
                 size=message_label.size, pos=message_label.pos, radius=[10]
             )
@@ -531,6 +538,9 @@ class MainScreen(Screen):
         
         # Refresh graph and notes display
         self.refresh_notes_display()
+        
+        # Clear visualization on load
+        self.clear_visualization()
         
         # Update UI components based on language
         self.update_notes_font()
@@ -621,34 +631,48 @@ class MainScreen(Screen):
         if response.get("response"):
             self.add_chat_message('agent', response["response"])
         
-        # Handle notes update
-        if response.get("notes_updated"):
-            # Fetch all notes to display
+        # Only update visualization if a search was performed and found_notes is present
+        found_notes_data = response.get("found_notes") or response.get("matches")
+        if found_notes_data:
             all_notes = self.app_instance.nlp_service.notes
             relations = self.app_instance.nlp_service.get_relations()
-            
-            # If the command found specific notes, show only them and their connections
-            found_notes_data = response.get("found_notes")
-            if found_notes_data:
-                
-                # Create a set of IDs to display: found notes, their parents, and their children
-                found_ids = {note['id'] for note in found_notes_data}
-                display_ids = set(found_ids)
-                
-                for note_id in found_ids:
-                    note = self.fetch_note_by_id(note_id)
-                    if note:
-                        if note.get('parent_id'):
-                            display_ids.add(note['parent_id'])
-                        if note.get('children'):
-                            display_ids.update(note.get('children'))
+            all_notes_by_id = {note['id']: note for note in all_notes}
 
-                # Filter the notes and relations to only include the ones to be displayed
-                notes_to_display = [note for note in all_notes if note['id'] in display_ids]
-                self.graph_widget.set_data(notes_to_display, relations)
-            else:
-                # Otherwise, display the full graph
-                self.graph_widget.set_data(all_notes, relations)
+            found_ids = {note['id'] for note in found_notes_data}
+            display_ids = set(found_ids)
+
+            # Add parents and children
+            for note_id in list(found_ids):
+                note = all_notes_by_id.get(note_id)
+                if note:
+                    parent_id = note.get('parent_id')
+                    if parent_id and parent_id in all_notes_by_id:
+                        display_ids.add(parent_id)
+                    children = note.get('children', [])
+                    for child_id in children:
+                        if child_id in all_notes_by_id:
+                            display_ids.add(child_id)
+
+            notes_to_display = [note for note in all_notes if note['id'] in display_ids]
+            # Optionally, filter relations to only those between displayed notes
+            filtered_relations = [
+                rel for rel in relations
+                if rel['source'] in display_ids and rel['target'] in display_ids
+            ]
+            self.graph_widget.set_data(notes_to_display, filtered_relations)
+            print(f"Found notes: {found_notes_data}")
+            print(f"Display IDs: {display_ids}")
+            print(f"Notes to display: {[note['title'] for note in notes_to_display]}")
+
+            print("=== DEBUG: Visualization Data ===")
+            print("Notes to display:")
+            for note in notes_to_display:
+                print(f"  ID: {note['id']}, Title: {note.get('title')}, Parent: {note.get('parent_id')}, Children: {note.get('children')}")
+            print("Relations to display:")
+            for rel in filtered_relations:
+                print(f"  Source: {rel['source']}, Target: {rel['target']}")
+            print("===============================")
+        # Do NOT update the graph for other commands (creation, etc.)
 
         # Stop listening unless confirmation is required
         if not response.get("requires_confirmation"):
@@ -665,4 +689,8 @@ class MainScreen(Screen):
 
         parent_id = self.current_note_context['id']
         command = f"create a note titled '{title}' as a child of '{parent_id}'"
-        self.process_command(command) 
+        self.process_command(command)
+
+    def clear_visualization(self):
+        """Clear the visualization graph."""
+        self.graph_widget.set_data([], []) 
