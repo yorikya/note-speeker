@@ -22,11 +22,11 @@ jobs:
         run: docker pull ghcr.io/kivy/buildozer:latest
 
       - name: Fix permissions for build
-        run: sudo chown -R 1001:1001 .
+        run: sudo chown -R 1000:1000 .
 
       - name: Build APK with Buildozer
         run: |
-          docker run --rm -u 0:0 -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
+          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
