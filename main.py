@@ -11,12 +11,14 @@ from kivy.core.window import Window
 from kivy.metrics import dp
 from kivymd.app import MDApp
 from kivymd.theming import ThemeManager
+from kivy.config import Config
 
 # Import our custom modules
 from app.widgets import SideMenu
 from app.screens import MainScreen, SettingsScreen, NotesScreen, HelpScreen
 from app.services import SpeechService, ConfigService
 from app.services.nlp_service import NLPService
+from app.services.log_service import LogService
 
 # Kivy requires minimum version
 kivy.require('2.0.0')
@@ -29,10 +31,10 @@ Window.size = (1200, 800)
 # Register Hebrew-supporting fonts
 def register_hebrew_fonts():
     """Register fonts that support Hebrew characters"""
-    system = platform.system()
+    current_platform = platform.system()
     
     try:
-        if system == "Darwin":  # macOS
+        if current_platform == "Darwin":  # macOS
             # Use macOS Hebrew-specific fonts
             font_paths = [
                 "/System/Library/Fonts/SFHebrew.ttf",
@@ -41,7 +43,7 @@ def register_hebrew_fonts():
                 "/System/Library/Fonts/Arial.ttf", 
                 "/System/Library/Fonts/Helvetica.ttc"
             ]
-        elif system == "Windows":
+        elif current_platform == "Windows":
             font_paths = [
                 "C:/Windows/Fonts/arial.ttf",
                 "C:/Windows/Fonts/calibri.ttf"
@@ -150,6 +152,9 @@ class NoteSpeakerApp(MDApp):
         self.side_menu = SideMenu(self)
         self.side_menu.x = -self.side_menu.width  # Hide off-screen
         self.main_layout.add_widget(self.side_menu)
+        
+        # Start persistent logging to file
+        LogService()
         
         return self.main_layout
     
