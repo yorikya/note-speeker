@@ -50,7 +50,7 @@ class SideMenu(BoxLayout):
         
         # App title with modern typography
         title = Label(
-            text='🎙️ Note Speaker',
+            text='Note Speaker',
             font_size='24sp',
             bold=True,
             color=(1, 1, 1, 1),  # White text
@@ -80,15 +80,15 @@ class SideMenu(BoxLayout):
             padding=[dp(15), dp(20), dp(15), dp(20)]
         )
         
-        # Navigation buttons with modern styling
-        nav_buttons = [
-            ('🏠', 'Home', self.go_to_home),
-            ('⚙️', 'Settings', self.go_to_settings),
-            ('📝', 'Notes', self.go_to_notes),
-            ('ℹ️', 'About', self.go_to_about)
+        # Use emoji icons with ASCII fallback in comments
+        menu_items = [
+            ('[H]', 'Home', self.go_to_home),
+            ('[S]', 'Settings', self.go_to_settings),
+            ('[N]', 'Notes', self.go_to_notes),
+            ('[?]', 'Help', self.go_to_help)
         ]
         
-        for icon, text, callback in nav_buttons:
+        for icon, text, callback in menu_items:
             btn = self.create_nav_button(icon, text, callback)
             nav_section.add_widget(btn)
         
@@ -198,10 +198,10 @@ class SideMenu(BoxLayout):
         print("DEBUG: Navigating to notes screen")
         self.app_instance.show_notes_screen()
     
-    def go_to_about(self):
-        """Navigate to about screen"""
-        print("DEBUG: Navigating to about screen")
-        self.app_instance.show_about_screen()
+    def go_to_help(self):
+        """Navigate to help screen"""
+        print("DEBUG: Navigating to help screen")
+        self.app_instance.show_help_screen()
     
     def refresh_language_display(self):
         """Refresh the language display in the subtitle"""

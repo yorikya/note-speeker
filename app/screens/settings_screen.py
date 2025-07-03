@@ -6,6 +6,7 @@ from kivy.uix.slider import Slider
 from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 from app.widgets import LanguageDropdown
+from kivy.uix.checkbox import CheckBox
 
 
 class SettingsScreen(Screen):
@@ -45,7 +46,7 @@ class SettingsScreen(Screen):
         header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(70))
         
         back_btn = Button(
-            text='← Back',
+            text='Back',
             size_hint=(None, 1),
             width=dp(120),
             font_size='18sp',
@@ -98,6 +99,12 @@ class SettingsScreen(Screen):
         recording_card.add_widget(recording_section)
         content.add_widget(recording_card)
         
+        # Voice energy threshold section (card style)
+        energy_card = self.create_card_section()
+        energy_section = self.create_voice_energy_section()
+        energy_card.add_widget(energy_section)
+        content.add_widget(energy_card)
+        
         # Config info section (card style)
         config_card = self.create_card_section()
         config_info = self.create_config_info()
@@ -109,6 +116,24 @@ class SettingsScreen(Screen):
         reset_section = self.create_reset_section()
         reset_card.add_widget(reset_section)
         content.add_widget(reset_card)
+        
+        # Welcome message setting (card style)
+        welcome_card = self.create_card_section()
+        welcome_box = BoxLayout(orientation='horizontal', spacing=dp(10), size_hint_y=None, height=dp(40))
+        self.show_welcome_checkbox = CheckBox(active=self.app_instance.config_service.get('show_welcome_message', True))
+        welcome_label = Label(
+            text='Show welcome message with usage instructions',
+            color=(1, 1, 1, 1),
+            font_size='16sp',
+            size_hint_x=1,
+            halign='left',
+            valign='middle'
+        )
+        welcome_label.bind(size=welcome_label.setter('text_size'))
+        welcome_box.add_widget(self.show_welcome_checkbox)
+        welcome_box.add_widget(welcome_label)
+        welcome_card.add_widget(welcome_box)
+        content.add_widget(welcome_card)
         
         scroll.add_widget(content)
         
@@ -170,7 +195,7 @@ class SettingsScreen(Screen):
         
         # Section title
         title_label = Label(
-            text='🔇 Auto-Stop on Silence',
+            text='Auto-Stop on Silence',
             size_hint_y=None,
             height=dp(35),
             color=(1, 1, 1, 1),
@@ -223,7 +248,7 @@ class SettingsScreen(Screen):
         
         # Section title
         title_label = Label(
-            text='⏱️ Max Recording Duration',
+            text='Max Recording Duration',
             size_hint_y=None,
             height=dp(35),
             color=(1, 1, 1, 1),
@@ -266,6 +291,47 @@ class SettingsScreen(Screen):
         
         return section
     
+    def create_voice_energy_section(self):
+        section = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(120),
+            spacing=dp(15)
+        )
+        title_label = Label(
+            text='Voice Energy Threshold',
+            size_hint_y=None,
+            height=dp(35),
+            color=(1, 1, 1, 1),
+            font_size='20sp',
+            bold=True,
+            halign='left'
+        )
+        title_label.text_size = (None, None)
+        current_energy = self.app_instance.config_service.get_voice_energy_threshold()
+        self.energy_label = Label(
+            text=f'Energy threshold: {current_energy}',
+            size_hint_y=None,
+            height=dp(30),
+            color=(0.8, 0.9, 1.0, 1),
+            font_size='16sp',
+            halign='left'
+        )
+        self.energy_label.text_size = (None, None)
+        self.energy_slider = Slider(
+            min=50,
+            max=400,
+            value=current_energy,
+            step=1,
+            size_hint_y=None,
+            height=dp(40)
+        )
+        self.energy_slider.bind(value=self.on_energy_change)
+        section.add_widget(title_label)
+        section.add_widget(self.energy_label)
+        section.add_widget(self.energy_slider)
+        return section
+    
     def create_config_info(self):
         """Create configuration file info section with modern styling"""
         section = BoxLayout(
@@ -276,7 +342,7 @@ class SettingsScreen(Screen):
         )
         
         title_label = Label(
-            text='💾 Configuration',
+            text='Configuration',
             size_hint_y=None,
             height=dp(35),
             color=(1, 1, 1, 1),
@@ -313,7 +379,7 @@ class SettingsScreen(Screen):
         )
         
         title_label = Label(
-            text='🔄 Reset Settings',
+            text='Reset Settings',
             size_hint_y=None,
             height=dp(35),
             color=(1, 1, 1, 1),
@@ -352,6 +418,14 @@ class SettingsScreen(Screen):
         self.recording_timeout_label.text = f'Auto-stop after {minutes} minutes'
         self.app_instance.config_service.set_recording_timeout(seconds)
     
+    def on_energy_change(self, instance, value):
+        value = int(value)
+        self.energy_label.text = f'Energy threshold: {value}'
+        self.app_instance.config_service.set_voice_energy_threshold(value)
+        # Propagate to speech_service if available
+        if hasattr(self.app_instance, 'speech_service') and self.app_instance.speech_service:
+            self.app_instance.speech_service.set_energy_threshold(value)
+    
     def reset_settings(self, instance):
         """Reset all settings to defaults"""
         # Reset to defaults
@@ -381,4 +455,6 @@ class SettingsScreen(Screen):
         from kivy.uix.label import Label
         msg = 'Settings saved successfully!' if success else 'Failed to save settings.'
         popup = Popup(title='Save Settings', content=Label(text=msg), size_hint=(0.6, 0.3))
-        popup.open() 
+        popup.open()
+        self.app_instance.config_service.set('show_welcome_message', self.show_welcome_checkbox.active)
+        self.app_instance.config_service.save_config() 

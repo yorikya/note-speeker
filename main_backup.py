@@ -22,4 +22,4 @@ with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
 
 # transcribe in Hebrew
 result = model.transcribe(path, language="he")
-print("📝  Text:", result["text"])
+print("Text:", result["text"])

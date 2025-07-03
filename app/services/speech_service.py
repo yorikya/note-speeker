@@ -27,7 +27,7 @@ class SpeechService:
         self.listen_thread = None
         self.stop_listening_flag = False
         # Configure recognizer for better performance
-        self.energy_threshold = config_service.get('energy_threshold', 100) if config_service else 100
+        self.energy_threshold = config_service.get_voice_energy_threshold() if config_service and hasattr(config_service, 'get_voice_energy_threshold') else 100
         self.recognizer.energy_threshold = self.energy_threshold
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 0.8
@@ -66,6 +66,7 @@ class SpeechService:
             print("[DEBUG SR] Entered listen_continuously thread.")
             try:
                 with sr.Microphone() as source:
+                    time.sleep(0.3)  # Wait 300ms before starting to listen
                     print(f"Starting continuous listening in {self.current_language}...")
                     print(f"Auto-stop after {silence_timeout}s silence or {recording_timeout}s total")
                     # Adjust for ambient noise
@@ -223,9 +224,8 @@ class SpeechService:
     def set_energy_threshold(self, value):
         self.energy_threshold = value
         self.recognizer.energy_threshold = value
-        if self.config_service:
-            self.config_service.set('energy_threshold', value)
-            self.config_service.save_config()
+        if self.config_service and hasattr(self.config_service, 'set_voice_energy_threshold'):
+            self.config_service.set_voice_energy_threshold(value)
 
     def get_energy_level(self):
         return self.recognizer.energy_threshold 

@@ -22,7 +22,7 @@ class NotesScreen(Screen):
         header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(60))
         
         back_btn = Button(
-            text='← Back',
+            text='Back',
             size_hint=(None, 1),
             width=dp(100),
             font_size='16sp'
@@ -41,12 +41,11 @@ class NotesScreen(Screen):
         # Notes content placeholder
         content = Label(
             text='Notes history will be displayed here.\n\n'
-                  'Features to implement:\n'
-                  '• Save transcribed text\n'
-                  '• View previous notes\n'
-                  '• Search through notes\n'
-                  '• Export notes\n'
-                  '• Delete notes',
+                  '- Save transcribed text\n'
+                  '- View previous notes\n'
+                  '- Search through notes\n'
+                  '- Export notes\n'
+                  '- Delete notes',
             font_size='16sp',
             halign='center',
             valign='middle'

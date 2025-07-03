@@ -156,12 +156,16 @@ class NoteGraphWidget(RelativeLayout):
                     dx = target_pos[0] - source_pos[0]
                     dy = target_pos[1] - source_pos[1]
                     angle = math.atan2(dy, dx)
-                    left_x = target_pos[0] - arrow_length * math.cos(angle - arrow_angle)
-                    left_y = target_pos[1] - arrow_length * math.sin(angle - arrow_angle)
-                    right_x = target_pos[0] - arrow_length * math.cos(angle + arrow_angle)
-                    right_y = target_pos[1] - arrow_length * math.sin(angle + arrow_angle)
-                    Line(points=[target_pos[0], target_pos[1], left_x, left_y], width=3)
-                    Line(points=[target_pos[0], target_pos[1], right_x, right_y], width=3)
+                    node_radius = 50
+                    # Move arrow tip to just outside the node
+                    tip_x = target_pos[0] - node_radius * math.cos(angle)
+                    tip_y = target_pos[1] - node_radius * math.sin(angle)
+                    left_x = tip_x - arrow_length * math.cos(angle - arrow_angle)
+                    left_y = tip_y - arrow_length * math.sin(angle - arrow_angle)
+                    right_x = tip_x - arrow_length * math.cos(angle + arrow_angle)
+                    right_y = tip_y - arrow_length * math.sin(angle + arrow_angle)
+                    Line(points=[tip_x, tip_y, left_x, left_y], width=3)
+                    Line(points=[tip_x, tip_y, right_x, right_y], width=3)
         self.add_widget(arrow_widget)
 
     def on_mouse_pos(self, *args):

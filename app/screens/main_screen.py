@@ -27,6 +27,11 @@ class MainScreen(Screen):
         self.name = 'main'
         self.current_note_context = None  # Track selected note
         self.status_label = None  # Will hold the status label
+        self.accumulating_description = False
+        self.accumulated_speech = []
+        self.pending_update_type = None
+        self.pending_note_title = None
+        self.welcome_shown = False  # Track if welcome message was already shown
         
         # Set modern gradient background
         with self.canvas.before:
@@ -346,8 +351,8 @@ class MainScreen(Screen):
         current_lang = self.app_instance.config_service.get_language()
         if current_lang in self.app_instance.speech_service.LANGUAGES:
             lang_name = self.app_instance.speech_service.LANGUAGES[current_lang]
-            return f"🎙️ Note Speaker ({lang_name})"
-        return "🎙️ Note Speaker"
+            return f"Note Speaker ({lang_name})"
+        return "Note Speaker"
     
     def toggle_recording(self, instance):
         """Toggle recording state with modern UI feedback"""
@@ -383,10 +388,41 @@ class MainScreen(Screen):
         self.record_btn.text = 'Start'  # Changed from 'start'
         self.record_btn.background_color = (0.2, 0.8, 0.3, 1)  # Green when ready
         self.stop_btn.disabled = True
-        
-        # Stop speech recognition
         print("[DEBUG] stop_recording: Stopping speech service.")
         self.app_instance.speech_service.stop_listening()
+        if self.accumulating_description:
+            full_text = ' '.join(self.accumulated_speech)
+            self.accumulating_description = False
+            self.accumulated_speech = []
+            if self.pending_update_type and self.pending_note_title:
+                self.update_note_description_direct(self.pending_note_title, full_text, self.pending_update_type)
+            self.pending_update_type = None
+            self.pending_note_title = None
+    
+    def update_note_description_direct(self, note_title, new_text, update_type):
+        # Directly update the note description or append, bypassing process_command chat flow
+        nlp_service = self.app_instance.nlp_service
+        # Find the note by title
+        note = next((n for n in nlp_service.notes if n.get('title') == note_title), None)
+        if not note:
+            self.add_chat_message('agent', f"Note '{note_title}' not found.")
+            return
+        if update_type == 'replace_description':
+            note['description'] = new_text
+        elif update_type == 'append_description':
+            current_desc = note.get('description', '')
+            if current_desc:
+                note['description'] = current_desc + '\n' + new_text
+            else:
+                note['description'] = new_text
+        nlp_service._save_notes()
+        lang = self.get_language()
+        if lang == 'he-IL':
+            msg = f"התיאור עודכן לרשומה '{note_title}'"
+        else:
+            msg = f"The description for '{note_title}' was updated."
+        self.add_chat_message('agent', msg)
+        self.refresh_notes_display()
     
     def fix_hebrew_display_direction(self, text):
         """Fix Hebrew text direction for display in UI widgets"""
@@ -490,7 +526,7 @@ class MainScreen(Screen):
     EN_USER_PREFIX = 'user:'
     EN_AGENT_PREFIX = 'agent:'
 
-    def add_chat_message(self, sender, message, requires_confirmation=False):
+    def add_chat_message(self, sender, message, requires_confirmation=False, suppress_tts=False):
         """Add a message to the chat history with modern styling"""
         # Determine prefix and alignment based on sender and language
         current_lang = self.app_instance.config_service.get_language()
@@ -570,16 +606,17 @@ class MainScreen(Screen):
         self.chat_history.parent.scroll_y = 0
 
         # Speak agent messages
-        if sender == 'agent':
-            # Stop microphone before TTS
+        if sender == 'agent' and not suppress_tts:
+            from app.services.nlp_service import WELCOME_MESSAGE_EN, WELCOME_MESSAGE_HE
+            if message.strip() in (WELCOME_MESSAGE_EN.strip(), WELCOME_MESSAGE_HE.strip()):
+                return
             print("[DEBUG] Stopping microphone before TTS playback.")
             self.app_instance.speech_service.stop_listening()
             def tts_and_resume():
                 self.app_instance.speech_service.speak_text(message)
-                # Resume listening if confirmation is required
                 if requires_confirmation:
                     import time
-                    time.sleep(0.5)  # Add a short delay to allow audio device to reset
+                    time.sleep(0.5)
                     print("[DEBUG] Resuming microphone after TTS playback (confirmation required, with delay).")
                     self.start_recording()
             import threading
@@ -589,10 +626,11 @@ class MainScreen(Screen):
         """Handle speech recognition result with modern feedback"""
         print(f"[DEBUG] on_speech_result: Recognized text: '{text}'")
         self.status_label.text = f'Recognized: "{text[:50]}..."'
-        self.add_chat_message('user', text)  # Add user's speech to chat
-        
-        # Process the command through the NLP service
-        self.process_command(text)
+        self.add_chat_message('user', text)
+        if self.accumulating_description:
+            self.accumulated_speech.append(text)
+        else:
+            self.process_command(text)
         
     def on_speech_error(self, error):
         """Handle speech recognition error"""
@@ -629,8 +667,17 @@ class MainScreen(Screen):
 
     def on_enter(self):
         """Called when the screen is displayed"""
+        self.chat_history.clear_widgets()  # Clear chat on app load
+        if not self.welcome_shown:
+            show_welcome = self.app_instance.config_service.get('show_welcome_message', True)
+            if show_welcome:
+                lang = self.get_language()
+                from app.services.nlp_service import WELCOME_MESSAGE_EN, WELCOME_MESSAGE_HE
+                msg = WELCOME_MESSAGE_HE if lang == 'he-IL' else WELCOME_MESSAGE_EN
+                self.show_welcome_popup(msg)
+            self.welcome_shown = True
         # Load notes from NLPService
-        self.app_instance.nlp_service._load_notes()
+        self.app_instance.nlp_service.notes, self.app_instance.nlp_service.last_note_id = self.app_instance.nlp_service._load_notes_and_last_id()
         
         # Refresh graph and notes display
         self.refresh_notes_display()
@@ -712,16 +759,44 @@ class MainScreen(Screen):
 
     def process_command(self, command_text):
         """Process a command using the NLPService and update the UI."""
-        
         # Fix quotes for hebrew
         fixed_command = self.fix_hebrew_quotes(
             command_text,
             self.get_language()
         )
-        
+        lang = self.get_language()
+        is_hebrew = lang == 'he-IL'
+        # Detect update/append description intent
+        replace_triggers_he = ["תעדכן תוכן", "עדכן תוכן", "עדכן את התוכן", "תעדכן את התוכן", "עדכן תיאור", "תעדכן תיאור"]
+        append_triggers_he = ["תוסיף תוכן", "הוסף תוכן", "הוסף לתוכן", "תוסיף לתוכן"]
+        replace_triggers_en = ["update description", "change description", "edit description", "replace description", "update content", "change content", "edit content", "replace content"]
+        append_triggers_en = ["append to description", "add to description", "append to content", "add to content"]
+        lower_cmd = command_text.lower()
+        # Check for note context (from find or selection)
+        note_title = None
+        if self.current_note_context:
+            note_title = self.current_note_context.get('title')
+        # If last find returned one note, use it
+        # (You may want to store last found note in a variable for robustness)
+        # Detect triggers
+        if is_hebrew:
+            if any(kw in command_text for kw in replace_triggers_he) and note_title:
+                self.start_description_update(note_title, 'replace_description')
+                return
+            elif any(kw in command_text for kw in append_triggers_he) and note_title:
+                self.start_description_update(note_title, 'append_description')
+                return
+        else:
+            if any(kw in lower_cmd for kw in replace_triggers_en) and note_title:
+                self.start_description_update(note_title, 'replace_description')
+                return
+            elif any(kw in lower_cmd for kw in append_triggers_en) and note_title:
+                self.start_description_update(note_title, 'append_description')
+                return
+        # Default: send to NLPService
         response = self.app_instance.nlp_service.process_command(
             fixed_command,
-            language=self.get_language()
+            language=lang
         )
         print(f"[DEBUG] NLP Response: {response}")
         
@@ -771,6 +846,10 @@ class MainScreen(Screen):
             for rel in filtered_relations:
                 print(f"  Source: {rel['source']}, Target: {rel['target']}")
             print("===============================")
+            # Set current note context if exactly one note was found
+            if len(found_notes_data) == 1:
+                self.current_note_context = found_notes_data[0]
+                print(f"[DEBUG CONTEXT] Set current_note_context to: {self.current_note_context}")
         # Always refresh notes display if notes were updated (created, updated, deleted)
         if response.get("notes_updated"):
             print("[DEBUG] notes_updated detected in response, refreshing notes display.")
@@ -794,4 +873,43 @@ class MainScreen(Screen):
 
     def clear_visualization(self):
         """Clear the visualization graph."""
-        self.graph_widget.set_data([], []) 
+        self.graph_widget.set_data([], [])
+
+    def start_description_update(self, note_title, update_type):
+        self.accumulating_description = True
+        self.accumulated_speech = []
+        self.pending_update_type = update_type
+        self.pending_note_title = note_title
+        self.status_label.text = 'Listening for description...'
+        self.record_btn.text = 'Recording...'
+        self.record_btn.background_color = (0.9, 0.3, 0.3, 1)
+        self.stop_btn.disabled = False
+        silence_timeout = self.app_instance.config_service.get_silence_timeout()
+        recording_timeout = self.app_instance.config_service.get_recording_timeout()
+        self.app_instance.speech_service.start_listening(
+            on_result=self.on_speech_result,
+            on_error=self.on_speech_error,
+            on_auto_stop=self.on_auto_stop,
+            silence_timeout=silence_timeout,
+            recording_timeout=recording_timeout
+        )
+
+    def show_welcome_popup(self, message):
+        from kivy.uix.popup import Popup
+        from kivy.uix.label import Label
+        from kivy.uix.button import Button
+        from kivy.uix.boxlayout import BoxLayout
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        label = Label(text=message, font_size='16sp', halign='right' if self.get_language() == 'he-IL' else 'left', valign='top', size_hint_y=1)
+        label.bind(size=label.setter('text_size'))
+        btn = Button(text='אישור' if self.get_language() == 'he-IL' else 'OK', size_hint_y=None, height=40)
+        layout.add_widget(label)
+        layout.add_widget(btn)
+        popup = Popup(title='הוראות שימוש' if self.get_language() == 'he-IL' else 'Usage Instructions', content=layout, size_hint=(0.8, 0.8), auto_dismiss=False)
+        def on_ok(instance):
+            popup.dismiss()
+            self.welcome_shown = True
+            print('[DEBUG] Welcome popup dismissed, welcome_shown set to True')
+        btn.bind(on_release=on_ok)
+        print('[DEBUG] Showing welcome popup')
+        popup.open() 

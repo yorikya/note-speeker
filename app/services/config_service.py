@@ -13,8 +13,10 @@ class ConfigService:
             'speech_language': 'en-US',
             'silence_timeout': 5,
             'recording_timeout': 600,  # 10 minutes in seconds
+            'voice_energy_threshold': 100,
             'theme': 'default',
-            'gemini_api_key': None  # Will be populated from environment if available
+            'gemini_api_key': None,  # Will be populated from environment if available
+            'show_welcome_message': True
         }
         self.config = self.load_config()
     
@@ -98,4 +100,11 @@ class ConfigService:
     
     def set_recording_timeout(self, timeout):
         """Set the recording timeout (no autosave)"""
-        self.set('recording_timeout', timeout) 
+        self.set('recording_timeout', timeout)
+    
+    def get_voice_energy_threshold(self):
+        return self.get('voice_energy_threshold', 100)
+    
+    def set_voice_energy_threshold(self, value):
+        self.set('voice_energy_threshold', value)
+        self.save_config() 

@@ -14,7 +14,7 @@ from kivymd.theming import ThemeManager
 
 # Import our custom modules
 from app.widgets import SideMenu
-from app.screens import MainScreen, SettingsScreen, NotesScreen, AboutScreen
+from app.screens import MainScreen, SettingsScreen, NotesScreen, HelpScreen
 from app.services import SpeechService, ConfigService
 from app.services.nlp_service import NLPService
 
@@ -116,7 +116,7 @@ class NoteSpeakerApp(MDApp):
         print(f"Config file location: {self.config_service.config_file}")
         
         # Ensure notes are loaded
-        self.nlp_service.notes = self.nlp_service._load_notes()
+        self.nlp_service.notes, self.nlp_service.last_note_id = self.nlp_service._load_notes_and_last_id()
         print(f"[DEBUG] Loaded {len(self.nlp_service.notes)} notes at startup")
         
         # Create the main layout
@@ -129,7 +129,7 @@ class NoteSpeakerApp(MDApp):
         self.main_screen = MainScreen(self)
         self.settings_screen = SettingsScreen(self)
         self.notes_screen = NotesScreen(self)
-        self.about_screen = AboutScreen(self)
+        self.about_screen = HelpScreen(self)
         
         # Add screens to manager
         self.screen_manager.add_widget(self.main_screen)
@@ -215,10 +215,10 @@ class NoteSpeakerApp(MDApp):
         print("DEBUG: show_notes_screen() called")
         self.screen_manager.current = 'notes'
     
-    def show_about_screen(self):
-        """Navigate to about screen"""
-        print("DEBUG: show_about_screen() called")
-        self.screen_manager.current = 'about'
+    def show_help_screen(self):
+        """Navigate to help screen"""
+        print("DEBUG: show_help_screen() called")
+        self.screen_manager.current = 'help'
     
     def listen(self, language=None, silence_timeout=5):
         """Delegate speech recognition to the service"""
