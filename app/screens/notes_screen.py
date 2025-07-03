@@ -3,6 +3,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.metrics import dp
+from kivy.uix.textinput import TextInput
+from kivy.uix.scrollview import ScrollView
+import json
+from bidi.algorithm import get_display
 
 
 class NotesScreen(Screen):
@@ -38,20 +42,31 @@ class NotesScreen(Screen):
         header.add_widget(back_btn)
         header.add_widget(title)
         
-        # Notes content placeholder
-        content = Label(
-            text='Notes history will be displayed here.\n\n'
-                  '- Save transcribed text\n'
-                  '- View previous notes\n'
-                  '- Search through notes\n'
-                  '- Export notes\n'
-                  '- Delete notes',
-            font_size='16sp',
-            halign='center',
-            valign='middle'
+        # Get notes data as JSON
+        nlp_service = self.app_instance.nlp_service
+        notes_data = {
+            'last_note_id': nlp_service.last_note_id,
+            'notes': nlp_service.notes
+        }
+        notes_json = json.dumps(notes_data, ensure_ascii=False, indent=2)
+        notes_json_display = get_display(notes_json)
+        # Scrollable, selectable text area
+        notes_text = TextInput(
+            text=notes_json_display,
+            readonly=True,
+            font_size='14sp',
+            size_hint_y=None,
+            height=dp(600),
+            background_color=(0.13, 0.15, 0.18, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(1, 1, 1, 1),
+            font_name='app/fonts/Alef-Regular.ttf',
+            multiline=True
         )
-        content.text_size = (None, None)
+        scroll = ScrollView()
+        notes_text.bind(minimum_height=notes_text.setter('height'))
+        scroll.add_widget(notes_text)
         
         layout.add_widget(header)
-        layout.add_widget(content)
+        layout.add_widget(scroll)
         self.add_widget(layout) 

@@ -479,80 +479,121 @@ The JSON must be in this exact format:
         return relations
 
     def process_command(self, text: str, language: str = 'en') -> Dict:
-        print(f"[DEBUG NLP] process_command called with text: '{text}', language: {language}, conversation_state: {self.conversation_state}")
-        print(f"[DEBUG NLP] re module id: {id(re) if 're' in globals() else 'NOT FOUND'}")
-        # Add to conversation history
-        self.conversation_history.append({'role': 'user', 'text': text, 'language': language})
-        if len(self.conversation_history) > 10:
-            self.conversation_history = self.conversation_history[-10:]
-        print(f"[DEBUG NLP] Raw text repr: {repr(text)}")
-        # Normalize text for robust matching
-        normalized_text = unicodedata.normalize('NFKC', text.strip())
-        is_hebrew = language == 'he-IL'
+        try:
+            print(f"[DEBUG NLP] process_command called with text: '{text}', language: {language}, conversation_state: {self.conversation_state}")
+            print(f"[DEBUG NLP] re module id: {id(re) if 're' in globals() else 'NOT FOUND'}")
+            # Add to conversation history
+            self.conversation_history.append({'role': 'user', 'text': text, 'language': language})
+            if len(self.conversation_history) > 10:
+                self.conversation_history = self.conversation_history[-10:]
+            print(f"[DEBUG NLP] Raw text repr: {repr(text)}")
+            # Normalize text for robust matching
+            normalized_text = unicodedata.normalize('NFKC', text.strip())
+            is_hebrew = language == 'he-IL'
 
-        # --- Handle multi-turn state for update/delete/add_sub_note/create after find ---
-        if self.conversation_state and self.conversation_state.get('operation') == 'create':
-            # Confirmation for create (including sub-notes)
-            pending_note = self.conversation_state.get('pending_note')
-            pending_title = self.conversation_state.get('pending_title', '')
-            pending_action = 'create'
-            intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
-            is_yes = intent_result['intent'] == 'yes'
-            is_no = intent_result['intent'] == 'no'
-            if is_yes:
-                # Actually create the note (or sub-note)
-                result = self.tools['create'].run(pending_note)
-                self.conversation_state = None
-                self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
-                return result
-            elif is_no:
-                self.conversation_state = None
-                response = "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
-                self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                return {"operation": "create_cancel", "response": response, "requires_confirmation": False}
-            else:
-                # Ask again
-                response = (
-                    f"אנא אשר או בטל: ליצור רשומה חדשה בשם '{pending_title}'?" if is_hebrew
-                    else f"Please confirm or cancel: create a new note called '{pending_title}'?"
-                )
-                self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                return {"operation": "create_confirm", "response": response, "requires_confirmation": True}
-        # --- Sub-note creation intent detection (add_sub_note) ---
-        if self.conversation_state and self.conversation_state.get('current_note'):
-            current_note = self.conversation_state['current_note']
-            # Detect sub-note intent (Hebrew and English)
-            subnote_triggers_he = ["תת רשומה", "תת-רשומה", "תוסיף תת רשומה", "הוסף תת רשומה"]
-            subnote_triggers_en = ["sub-note", "sub note", "child note", "add sub-note", "add child note"]
-            if (is_hebrew and any(trigger in normalized_text for trigger in subnote_triggers_he)) or (not is_hebrew and any(trigger in normalized_text for trigger in subnote_triggers_en)):
-                # Extract sub-note title
-                extract_result = self.tools['extract_sub_note_title'].run({'text': text, 'language': language})
-                title = extract_result.get('title', '').strip()
-                if not title:
-                    response = extract_result.get('response', 'Please specify the sub-note title.')
+            # --- Handle multi-turn state for update/delete/add_sub_note/create after find ---
+            if self.conversation_state and self.conversation_state.get('operation') == 'create':
+                # Confirmation for create (including sub-notes)
+                pending_note = self.conversation_state.get('pending_note')
+                pending_title = self.conversation_state.get('pending_title', '')
+                pending_action = 'create'
+                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
+                is_yes = intent_result['intent'] == 'yes'
+                is_no = intent_result['intent'] == 'no'
+                if is_yes:
+                    # Actually create the note (or sub-note)
+                    result = self.tools['create'].run(pending_note)
+                    self.conversation_state = None
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+                elif is_no:
+                    self.conversation_state = None
+                    response = "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
                     self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                    return {"operation": "add_sub_note", "response": response, "requires_confirmation": False}
-                # Check if sub-note already exists under this parent
-                notes = self.notes
-                parent_id = current_note['id']
-                existing_note = next((n for n in notes if n["title"] == title and n.get("parent_id") == parent_id), None)
-                if existing_note:
+                    return {"operation": "create_cancel", "response": response, "requires_confirmation": False}
+                else:
+                    # Ask again
                     response = (
-                        f"רשומת משנה בשם '{title}' כבר קיימת תחת {current_note['title']}." if is_hebrew
-                        else f"A sub-note called '{title}' already exists under {current_note['title']}."
+                        f"אנא אשר או בטל: ליצור רשומה חדשה בשם '{pending_title}'?" if is_hebrew
+                        else f"Please confirm or cancel: create a new note called '{pending_title}'?"
                     )
                     self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                    return {"operation": "add_sub_note", "response": response, "requires_confirmation": False}
-                # Prompt for confirmation before creating sub-note
+                    return {"operation": "create_confirm", "response": response, "requires_confirmation": True}
+            # --- Sub-note creation intent detection (add_sub_note) ---
+            if self.conversation_state and self.conversation_state.get('current_note'):
+                current_note = self.conversation_state['current_note']
+                # Detect sub-note intent (Hebrew and English)
+                subnote_triggers_he = ["תת רשומה", "תת-רשומה", "תוסיף תת רשומה", "הוסף תת רשומה"]
+                subnote_triggers_en = ["sub-note", "sub note", "child note", "add sub-note", "add child note"]
+                if (is_hebrew and any(trigger in normalized_text for trigger in subnote_triggers_he)) or (not is_hebrew and any(trigger in normalized_text for trigger in subnote_triggers_en)):
+                    # Extract sub-note title
+                    extract_result = self.tools['extract_sub_note_title'].run({'text': text, 'language': language})
+                    title = extract_result.get('title', '').strip()
+                    if not title:
+                        response = extract_result.get('response', 'Please specify the sub-note title.')
+                        self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                        return {"operation": "add_sub_note", "response": response, "requires_confirmation": False}
+                    # Check if sub-note already exists under this parent
+                    notes = self.notes
+                    parent_id = current_note['id']
+                    existing_note = next((n for n in notes if n["title"] == title and n.get("parent_id") == parent_id), None)
+                    if existing_note:
+                        response = (
+                            f"רשומת משנה בשם '{title}' כבר קיימת תחת {current_note['title']}." if is_hebrew
+                            else f"A sub-note called '{title}' already exists under {current_note['title']}."
+                        )
+                        self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                        return {"operation": "add_sub_note", "response": response, "requires_confirmation": False}
+                    # Prompt for confirmation before creating sub-note
+                    response = (
+                        f"האם להוסיף תת-רשומה בשם '{title}' תחת '{current_note['title']}'?" if is_hebrew
+                        else f"Do you want me to add a sub-note called '{title}' under '{current_note['title']}'?"
+                    )
+                    self.conversation_state = {
+                        'operation': 'create',
+                        'pending_note': {
+                            'title': title,
+                            'parent_id': parent_id,
+                            'nlp_service': self,
+                            'original_text': text,
+                            'requires_confirmation': True
+                        },
+                        'confirm_action': 'create',
+                        'pending_title': title
+                    }
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "add_sub_note_confirm", "response": response, "requires_confirmation": True}
+            # Hebrew create intent detection
+            create_triggers_he = [
+                "צור", "הוסף", "חדש", "כתוב", "רשום", "זכור",
+                "תיצור", "תיצרי", "תיצרו"
+            ]
+            if is_hebrew and any(trigger in normalized_text for trigger in create_triggers_he):
+                # Use regex to remove trigger + optional 'רשומה חדשה' at the start
+                pattern = r'^(?:' + '|'.join(create_triggers_he) + r')\s*(?:רשומה)?\s*(?:חדשה)?\s*(.*)'
+                match = re.match(pattern, normalized_text)
+                title = match.group(1).strip() if match and match.group(1) else ''
+                if not title:
+                    title = "ללא שם"  # fallback: Untitled
+                # Check if note exists
+                notes = self.notes
+                existing_note = next((n for n in notes if n["title"] == title), None)
+                if existing_note:
+                    response = (
+                        f"רשומה בשם '{title}' כבר קיימת." if is_hebrew
+                        else f"A note with the name '{title}' already exists."
+                    )
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "create", "response": response, "requires_confirmation": False}
+                # Prompt for confirmation before creating
                 response = (
-                    f"האם להוסיף תת-רשומה בשם '{title}' תחת '{current_note['title']}'?" if is_hebrew
-                    else f"Do you want me to add a sub-note called '{title}' under '{current_note['title']}'?"
+                    f"האם ליצור רשומה חדשה בשם '{title}'?" if is_hebrew
+                    else f"Do you want me to create a new note called '{title}'?"
                 )
                 self.conversation_state = {
                     'operation': 'create',
                     'pending_note': {
                         'title': title,
-                        'parent_id': parent_id,
                         'nlp_service': self,
                         'original_text': text,
                         'requires_confirmation': True
@@ -561,133 +602,111 @@ The JSON must be in this exact format:
                     'pending_title': title
                 }
                 self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                return {"operation": "add_sub_note_confirm", "response": response, "requires_confirmation": True}
-        # Hebrew create intent detection
-        create_triggers_he = [
-            "צור", "הוסף", "חדש", "כתוב", "רשום", "זכור",
-            "תיצור", "תיצרי", "תיצרו"
-        ]
-        if is_hebrew and any(trigger in normalized_text for trigger in create_triggers_he):
-            # Use regex to remove trigger + optional 'רשומה חדשה' at the start
-            pattern = r'^(?:' + '|'.join(create_triggers_he) + r')\s*(?:רשומה)?\s*(?:חדשה)?\s*(.*)'
-            match = re.match(pattern, normalized_text)
-            title = match.group(1).strip() if match and match.group(1) else ''
-            if not title:
-                title = "ללא שם"  # fallback: Untitled
-            # Check if note exists
-            notes = self.notes
-            existing_note = next((n for n in notes if n["title"] == title), None)
-            if existing_note:
-                response = (
-                    f"רשומה בשם '{title}' כבר קיימת." if is_hebrew
-                    else f"A note with the name '{title}' already exists."
+                return {"operation": "create_confirm", "response": response, "requires_confirmation": True}
+            # --- Handle multi-turn state for update/delete/add_sub_note after find ---
+            if self.conversation_state and self.conversation_state.get('current_note'):
+                print(f"[DEBUG CONTEXT] Using current_note from context: {self.conversation_state['current_note']}")
+                current_note = self.conversation_state['current_note']
+                is_hebrew = language == 'he-IL'
+                # Detect delete intent directly after generic prompt
+                delete_phrases = [
+                    "מחק", "תמחק", "תמחוק", "למחוק", "מחק רשומה", "תמחק רשומה", "תמחוק רשומה",
+                    "delete", "remove", "erase", "delete note", "remove note", "erase note"
+                ]
+                # Use regex for Hebrew variants
+                delete_intent = any(phrase in normalized_text for phrase in delete_phrases) or (
+                    is_hebrew and re.search(r"\b(מחק|תמחק|תמחוק|למחוק)\b", normalized_text)
                 )
-                self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                return {"operation": "create", "response": response, "requires_confirmation": False}
-            # Prompt for confirmation before creating
-            response = (
-                f"האם ליצור רשומה חדשה בשם '{title}'?" if is_hebrew
-                else f"Do you want me to create a new note called '{title}'?"
-            )
-            self.conversation_state = {
-                'operation': 'create',
-                'pending_note': {
-                    'title': title,
-                    'nlp_service': self,
-                    'original_text': text,
-                    'requires_confirmation': True
-                },
-                'confirm_action': 'create',
-                'pending_title': title
-            }
-            self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-            return {"operation": "create_confirm", "response": response, "requires_confirmation": True}
-        # --- Handle multi-turn state for update/delete/add_sub_note after find ---
-        if self.conversation_state and self.conversation_state.get('current_note'):
-            print(f"[DEBUG CONTEXT] Using current_note from context: {self.conversation_state['current_note']}")
-            current_note = self.conversation_state['current_note']
-            is_hebrew = language == 'he-IL'
-            # Detect delete intent directly after generic prompt
-            delete_phrases = [
-                "מחק", "תמחק", "תמחוק", "למחוק", "מחק רשומה", "תמחק רשומה", "תמחוק רשומה",
-                "delete", "remove", "erase", "delete note", "remove note", "erase note"
-            ]
-            # Use regex for Hebrew variants
-            delete_intent = any(phrase in normalized_text for phrase in delete_phrases) or (
-                is_hebrew and re.search(r"\b(מחק|תמחק|תמחוק|למחוק)\b", normalized_text)
-            )
-            if delete_intent:
-                found_note = current_note
-                self.conversation_state = {
-                    'operation': 'delete',
-                    'pending_note': {
-                        'target_id': found_note['id'],
-                        'requires_confirmation': True
-                    },
-                    'confirm_action': 'delete',
-                    'found_note': found_note,
-                    'current_note': found_note
-                }
-                response = (
-                    f"האם למחוק את הרשומה {found_note['title']}?" if is_hebrew
-                    else f"Delete the note {found_note['title']}?"
-                )
-                print(f"[DEBUG DELETE] Returning delete confirmation: {response}")
-                self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
-                return {'response': response, 'requires_confirmation': True}
-        # --- Existing confirmation state for update/delete ---
-        if self.conversation_state:
-            print(f"[DEBUG NLP] In conversation state: {self.conversation_state}")
-            is_hebrew = language == 'he-IL'
-            # Use ConfirmationIntentTool
-            pending_action = self.conversation_state.get('operation') if self.conversation_state else None
-            intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
-            print(f"[DEBUG NLP] ConfirmationIntentTool result: {intent_result}")
-            is_yes = intent_result['intent'] == 'yes'
-            if is_yes:
-                print("[DEBUG NLP] User confirmed.")
-                operation = self.conversation_state.get("operation")
-                pending_note = self.conversation_state.get("pending_note")
-                pending_note["requires_confirmation"] = False
-                # Ensure nlp_service is present for all operations
-                if 'nlp_service' not in pending_note:
-                    pending_note['nlp_service'] = self
-                print(f"[DEBUG NLP] pending_note before tool call: {pending_note}")
-                tool = self.tools.get(operation)
-                if tool:
-                    result = tool.run(pending_note)
-                    result["notes_updated"] = True
+                if delete_intent:
+                    found_note = current_note
+                    self.conversation_state = {
+                        'operation': 'delete',
+                        'pending_note': {
+                            'target_id': found_note['id'],
+                            'requires_confirmation': True
+                        },
+                        'confirm_action': 'delete',
+                        'found_note': found_note,
+                        'current_note': found_note
+                    }
+                    response = (
+                        f"האם למחוק את הרשומה {found_note['title']}?" if is_hebrew
+                        else f"Delete the note {found_note['title']}?"
+                    )
+                    print(f"[DEBUG DELETE] Returning delete confirmation: {response}")
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {'response': response, 'requires_confirmation': True}
+            # --- Existing confirmation state for update/delete ---
+            if self.conversation_state:
+                print(f"[DEBUG NLP] In conversation state: {self.conversation_state}")
+                is_hebrew = language == 'he-IL'
+                # Use ConfirmationIntentTool
+                pending_action = self.conversation_state.get('operation') if self.conversation_state else None
+                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
+                print(f"[DEBUG NLP] ConfirmationIntentTool result: {intent_result}")
+                is_yes = intent_result['intent'] == 'yes'
+                if is_yes:
+                    print("[DEBUG NLP] User confirmed.")
+                    operation = self.conversation_state.get("operation")
+                    pending_note = self.conversation_state.get("pending_note")
+                    pending_note["requires_confirmation"] = False
+                    # Ensure nlp_service is present for all operations
+                    if 'nlp_service' not in pending_note:
+                        pending_note['nlp_service'] = self
+                    print(f"[DEBUG NLP] pending_note before tool call: {pending_note}")
+                    tool = self.tools.get(operation)
+                    if tool:
+                        result = tool.run(pending_note)
+                        result["notes_updated"] = True
+                    else:
+                        result = {"response": "Error: Tool not found."}
+                    self.conversation_state = None
+                    print(f"[DEBUG NLP] Returning result after confirmation: {result}")
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
                 else:
-                    result = {"response": "Error: Tool not found."}
-                self.conversation_state = None
-                print(f"[DEBUG NLP] Returning result after confirmation: {result}")
-                self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
-                return result
-            else:
-                print("[DEBUG NLP] User denied.")
-                self.conversation_state = None
-                result = {
-                    "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
+                    print("[DEBUG NLP] User denied.")
+                    self.conversation_state = None
+                    result = {
+                        "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
+                    }
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+            # --- Find command: update context if single note found ---
+            response = self.tools['find'].run({'query': text, 'nlp_service': self})
+            matches = response.get('matches', [])
+            if len(matches) == 1:
+                print(f"[DEBUG CONTEXT] Switching context to note: {matches[0]}")
+                self.conversation_state = {'current_note': matches[0]}
+                response_text = (
+                    "נמצאה רשומה אחת. האם תרצה לעדכן, למחוק או להוסיף תת-רשומה?"
+                    if language == 'he-IL'
+                    else "Found 1 note. Would you like to update, delete, or add a sub-note?"
+                )
+                return {
+                    "response": response_text,
+                    "matches": matches,
+                    "requires_confirmation": True
                 }
-                self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
-                return result
-        # --- Find command: update context if single note found ---
-        response = self.tools['find'].run({'query': text, 'nlp_service': self})
-        matches = response.get('matches', [])
-        if len(matches) == 1:
-            print(f"[DEBUG CONTEXT] Switching context to note: {matches[0]}")
-            self.conversation_state = {'current_note': matches[0]}
-            response_text = (
-                "נמצאה רשומה אחת. האם תרצה לעדכן, למחוק או להוסיף תת-רשומה?"
-                if language == 'he-IL'
-                else "Found 1 note. Would you like to update, delete, or add a sub-note?"
+            return response
+        except Exception as e:
+            print(f"[AGENT ERROR] {e}\n{traceback.format_exc()}")
+            # Fallback message to user
+            is_hebrew = language == 'he-IL'
+            fallback_msg = (
+                "מצטער, לא הצלחתי להבין את הבקשה שלך. תוכל לנסח שוב או להבהיר מה תרצה לעשות?"
+                if is_hebrew else
+                "Sorry, I ran into a problem understanding your request. Could you please clarify what you want to do?"
             )
-            return {
-                "response": response_text,
-                "matches": matches,
-                "requires_confirmation": True
-            }
-        return response
+            # Try to send message to user if possible
+            try:
+                if hasattr(self, 'app_instance') and hasattr(self.app_instance, 'main_screen'):
+                    self.app_instance.main_screen.add_chat_message('agent', fallback_msg)
+            except Exception as e2:
+                print(f"[AGENT ERROR] Could not send fallback message: {e2}")
+            # Reset conversation state
+            self.conversation_state = None
+            return {"response": fallback_msg, "error": str(e)}
 
     def _migrate_notes_if_needed(self):
         """Migrate notes from old location (project root) to new location (~/.note_speaker)"""

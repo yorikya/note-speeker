@@ -35,7 +35,6 @@ class MainScreen(Screen):
         
         # Set modern gradient background
         with self.canvas.before:
-            from kivy.graphics import Color, Rectangle
             # Modern gradient background (dark blue to dark gray)
             Color(0.1, 0.15, 0.25, 1)  # Dark blue-gray
             self.bg_rect = Rectangle(size=self.size, pos=self.pos)
@@ -178,31 +177,65 @@ class MainScreen(Screen):
         main_layout.add_widget(chat_section)
 
         # Only keep the status at the bottom
-        status_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(30))
+        status_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=dp(30), padding=[dp(10), 0, dp(10), 0], spacing=dp(10))
         self.status_label = Label(
             text="Ready to record",
-            size_hint=(0.7, 1),
+            size_hint=(None, 1),
+            width=dp(180),
             halign='right',
             valign='middle',
             font_name='app/fonts/Alef-Regular.ttf'
         )
         self.status_label.bind(size=self.status_label.setter('text_size'))
-        self.energy_label = Label(
-            text="Energy: ...",
-            size_hint=(0.3, 1),
-            halign='left',
+        # Add pipe and extra space between status and prefix
+        self.status_pipe_label = Label(
+            text="   |   ",
+            size_hint=(None, 1),
+            width=dp(40),
+            halign='center',
             valign='middle',
             font_name='app/fonts/Alef-Regular.ttf'
         )
-        self.energy_label.bind(size=self.energy_label.setter('text_size'))
+        self.status_pipe_label.bind(size=self.status_pipe_label.setter('text_size'))
+        # Reduce space between prefix and bar
+        self.energy_prefix_label = Label(
+            text="Voice:",
+            size_hint=(None, 1),
+            width=dp(60),
+            halign='right',
+            valign='middle',
+            font_name='app/fonts/Alef-Regular.ttf'
+        )
+        self.energy_prefix_label.bind(size=self.energy_prefix_label.setter('text_size'))
+        self.energy_bar = Widget(size_hint=(0.035, 1))  # Halve the width
+        with self.energy_bar.canvas:
+            self.energy_bar_color = Color(0.2, 0.9, 0.3, 1)  # Green
+            self.energy_bar_rect = Rectangle(pos=(self.energy_bar.x, self.energy_bar.y + (self.energy_bar.height - dp(18)) / 2), size=(0, dp(18)))
+            self.energy_bar_border = Line(rectangle=(self.energy_bar.x, self.energy_bar.y + (self.energy_bar.height - dp(18)) / 2, self.energy_bar.width, dp(18)), width=1.2)
+        def update_bar_pos(instance, value):
+            bar_height = dp(18)
+            bar_y = self.energy_bar.y + (self.energy_bar.height - bar_height) / 2
+            self.energy_bar_rect.pos = (self.energy_bar.x, bar_y)
+            self.energy_bar_rect.size = (self.energy_bar_rect.size[0], bar_height)
+            self.energy_bar_border.rectangle = (self.energy_bar.x, bar_y, self.energy_bar.width, bar_height)
+        self.energy_bar.bind(pos=update_bar_pos, size=update_bar_pos)
         status_layout.add_widget(self.status_label)
-        status_layout.add_widget(self.energy_label)
+        status_layout.add_widget(self.status_pipe_label)
+        status_layout.add_widget(self.energy_prefix_label)
+        status_layout.add_widget(self.energy_bar)
         main_layout.add_widget(status_layout)
-        # Schedule energy label update
-        def update_energy_label(dt):
+        # Schedule energy bar update
+        def update_energy_bar(dt):
             energy = self.app_instance.speech_service.get_energy_level()
-            self.energy_label.text = f"Energy: {energy:.1f}"
-        Clock.schedule_interval(update_energy_label, 1)
+            # Bar width: max 1000, fill parent width
+            bar_max_width = self.energy_bar.width
+            bar_height = dp(18)
+            bar_width = min(max(energy / 1000.0, 0.0), 1.0) * bar_max_width
+            bar_y = self.energy_bar.y + (self.energy_bar.height - bar_height) / 2
+            self.energy_bar_rect.pos = (self.energy_bar.x, bar_y)
+            self.energy_bar_rect.size = (bar_width, bar_height)
+            self.energy_bar_border.rectangle = (self.energy_bar.x, bar_y, self.energy_bar.width, bar_height)
+        Clock.schedule_interval(update_energy_bar, 1)
 
         self.add_widget(main_layout)
         
@@ -221,7 +254,6 @@ class MainScreen(Screen):
         
         # Add card background
         with card.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle
             Color(0.2, 0.25, 0.35, 0.9)  # Semi-transparent dark card
             card.bg = RoundedRectangle(size=card.size, pos=card.pos, radius=[15])
             card.bind(size=lambda instance, value: setattr(card.bg, 'size', value))
@@ -249,7 +281,6 @@ class MainScreen(Screen):
         
         # Add card background
         with card.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle
             Color(0.2, 0.25, 0.35, 0.9)  # Semi-transparent dark card
             card.bg = RoundedRectangle(size=card.size, pos=card.pos, radius=[15])
             card.bind(size=lambda instance, value: setattr(card.bg, 'size', value))
@@ -310,7 +341,6 @@ class MainScreen(Screen):
         # Create a container for the scroll/chat with a border
         chat_container = BoxLayout(orientation='vertical', size_hint_y=1, padding=dp(8))
         with chat_container.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle, Line
             Color(0.2, 0.25, 0.35, 0.9)  # Card background
             chat_container.bg = RoundedRectangle(size=chat_container.size, pos=chat_container.pos, radius=[15])
             Color(0.5, 0.7, 1, 1)  # Border color (light blue)
