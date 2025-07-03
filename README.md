@@ -222,13 +222,19 @@ buildozer init
 
 # Install Buildozer dependencies
 pip install buildozer
+
+export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
 ```
 
 #### 2. Build Debug APK
 
 ```bash
-buildozer android debug
+docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
 ```
+**Note: when buldozer tool asking to install openssl, say "no" beacuse he is trying to install oudated 
+openssl library (openssl@1.1)** 
 
 This will:
 - Download Android SDK and NDK automatically
@@ -432,3 +438,35 @@ The application is built with:
 ## License
 
 MIT License
+
+---
+
+## Building APK with the Official Buildozer Docker Image
+
+You can build your APK in a clean Linux environment using the official Buildozer Docker image, which avoids most macOS/Windows compatibility issues and works on both amd64 and arm64 (Apple Silicon).
+
+### 1. Pull the Official Image (if needed)
+
+```sh
+docker pull ghcr.io/kivy/buildozer:latest
+```
+
+### 2. Build Your APK
+
+From your project directory, run:
+
+```sh
+docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
+```
+
+- This will mount your project into the container and run the build.
+- The resulting APK will appear in your `bin/` directory.
+- **Note:** The `--platform linux/amd64` flag is required on Apple Silicon (M1/M2) and ARM64 systems to enable 32-bit library support for Android build tools.
+
+### 3. (Optional) Add Extra System Dependencies
+
+If you need extra system packages, you can create a custom Dockerfile based on this image (see previous instructions).
+
+---
+
+This approach gives you a portable, repeatable build environment and avoids most platform-specific issues.

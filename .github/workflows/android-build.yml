@@ -1,0 +1,32 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Pull Buildozer Docker image
+        run: docker pull ghcr.io/kivy/buildozer:latest
+
+      - name: Build APK with Buildozer
+        run: |
+          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: apk
+          path: bin/*.apk 
