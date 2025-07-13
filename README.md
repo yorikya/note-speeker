@@ -471,26 +471,37 @@ If you need extra system packages, you can create a custom Dockerfile based on t
 
 This approach gives you a portable, repeatable build environment and avoids most platform-specific issues.
 
-## Example: Conversational Command Understanding Flow
+## Voice Command Conversational Flow
 
-Below is an example of how the new conversational command understanding logic works:
+Below is a diagram illustrating the conversational, multi-turn, context-aware flow for handling user voice commands:
 
 ```mermaid
-sequenceDiagram
-    participant User
-    participant App
-    participant NLP/Intent Model
+flowchart TD
+    UserStart([User speaks])
+    AgentAnalyze([Agent analyzes input])
+    ClarifyNeeded{Need clarification?}
+    AgentAsk([Agent asks for clarification])
+    UserReply([User replies])
+    ToolReady{Ready to select tool?}
+    SelectTool([Agent selects and executes tool])
+    AgentRespond([Agent responds to user])
+    MoreContext{Further context needed?}
+    ContinueContext([Continue conversation in new context])
+    End([End])
 
-    User->>App: (Speaks freely)
-    App->>App: Accumulate speech
-    App->>NLP/Intent Model: Is command complete?
-    NLP/Intent Model-->>App: Not yet / Need more info
-    App->>User: (Prompt for clarification)
-    User->>App: (Provides more info)
-    App->>NLP/Intent Model: Is command complete?
-    NLP/Intent Model-->>App: Yes, intent detected
-    App->>NLP/Intent Model: Summarize & parse command
-    NLP/Intent Model-->>App: Command + parameters
-    App->>App: Execute command
-    App->>User: (Show result)
+    UserStart --> AgentAnalyze
+    AgentAnalyze --> ClarifyNeeded
+    ClarifyNeeded -- Yes --> AgentAsk
+    AgentAsk --> UserReply
+    UserReply --> AgentAnalyze
+    ClarifyNeeded -- No --> ToolReady
+    ToolReady -- No --> AgentAsk
+    ToolReady -- Yes --> SelectTool
+    SelectTool --> AgentRespond
+    AgentRespond --> MoreContext
+    MoreContext -- Yes --> ContinueContext
+    ContinueContext --> AgentAnalyze
+    MoreContext -- No --> End
 ```
+
+This flow matches the real conversational experience, where the agent and user can go back and forth until the agent has enough information to act, and can continue in a new context if needed (e.g., updating a description).

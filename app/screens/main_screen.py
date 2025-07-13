@@ -797,10 +797,7 @@ class MainScreen(Screen):
         lang = self.get_language()
         is_hebrew = lang == 'he-IL'
         # Detect update/append description intent
-        replace_triggers_he = ["תעדכן תוכן", "עדכן תוכן", "עדכן את התוכן", "תעדכן את התוכן", "עדכן תיאור", "תעדכן תיאור"]
-        append_triggers_he = ["תוסיף תוכן", "הוסף תוכן", "הוסף לתוכן", "תוסיף לתוכן"]
-        replace_triggers_en = ["update description", "change description", "edit description", "replace description", "update content", "change content", "edit content", "replace content"]
-        append_triggers_en = ["append to description", "add to description", "append to content", "add to content"]
+        # (Old trigger code removed; all commands now handled by NLPService/tool selection)
         lower_cmd = command_text.lower()
         # Check for note context (from find or selection)
         note_title = None
@@ -809,20 +806,6 @@ class MainScreen(Screen):
         # If last find returned one note, use it
         # (You may want to store last found note in a variable for robustness)
         # Detect triggers
-        if is_hebrew:
-            if any(kw in command_text for kw in replace_triggers_he) and note_title:
-                self.start_description_update(note_title, 'replace_description')
-                return
-            elif any(kw in command_text for kw in append_triggers_he) and note_title:
-                self.start_description_update(note_title, 'append_description')
-                return
-        else:
-            if any(kw in lower_cmd for kw in replace_triggers_en) and note_title:
-                self.start_description_update(note_title, 'replace_description')
-                return
-            elif any(kw in lower_cmd for kw in append_triggers_en) and note_title:
-                self.start_description_update(note_title, 'append_description')
-                return
         # Default: send to NLPService
         response = self.app_instance.nlp_service.process_command(
             fixed_command,

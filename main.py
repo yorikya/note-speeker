@@ -260,4 +260,26 @@ class NoteSpeakerApp(MDApp):
 
 # Run the app
 if __name__ == '__main__':
-    NoteSpeakerApp().run() 
+    try:
+        NoteSpeakerApp().run()
+    except Exception as e:
+        import traceback
+        from kivy.app import App
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.label import Label
+        from kivy.uix.popup import Popup
+        from kivy.core.window import Window
+        class ErrorApp(App):
+            def build(self):
+                layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
+                error_text = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+                label = Label(text=error_text, font_size='14sp', size_hint_y=0.9, text_size=(Window.width*0.8, None))
+                btn = Button(text='OK', size_hint_y=0.1, height=40)
+                layout.add_widget(label)
+                layout.add_widget(btn)
+                popup = Popup(title='Startup Error', content=layout, size_hint=(0.95, 0.95), auto_dismiss=False)
+                btn.bind(on_release=lambda inst: App.get_running_app().stop())
+                popup.open()
+                return BoxLayout()  # Empty background
+        ErrorApp().run() 
