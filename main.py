@@ -12,6 +12,8 @@ from kivy.metrics import dp
 from kivymd.app import MDApp
 from kivymd.theming import ThemeManager
 from kivy.config import Config
+import os
+os.environ["KIVY_LOG_DIR"] = "/sdcard/"
 
 # Import our custom modules
 from app.widgets import SideMenu
