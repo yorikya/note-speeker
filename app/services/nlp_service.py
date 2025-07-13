@@ -608,6 +608,33 @@ The JSON must be in this exact format:
                 print(f"[DEBUG CONTEXT] Using current_note from context: {self.conversation_state['current_note']}")
                 current_note = self.conversation_state['current_note']
                 is_hebrew = language == 'he-IL'
+                # Detect update intent directly after generic prompt
+                update_triggers_he = [
+                    "עדכן", "שנה", "ערוך", "הוסף ל", "לעדכן", "לעדכן תוכן", "לעדכן רשומה", "לעדכן את הרשומה", "לעדכן את התוכן"
+                ]
+                update_triggers_en = [
+                    "update", "change", "modify", "edit", "add to", "append"
+                ]
+                update_intent = (
+                    (is_hebrew and any(trigger in normalized_text for trigger in update_triggers_he)) or
+                    (not is_hebrew and any(trigger in normalized_text for trigger in update_triggers_en))
+                )
+                if update_intent:
+                    # Prompt for new content
+                    response = (
+                        "מה תרצה לעדכן? אנא אמור את התוכן החדש לרשומה." if is_hebrew
+                        else "What would you like to update? Please say the new content for the note."
+                    )
+                    self.conversation_state = {
+                        'operation': 'update_pending_content',
+                        'pending_note': {
+                            'target_id': current_note['id'],
+                            'nlp_service': self
+                        },
+                        'current_note': current_note
+                    }
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "update_ask_content", "response": response, "requires_confirmation": False}
                 # Detect delete intent directly after generic prompt
                 delete_phrases = [
                     "מחק", "תמחק", "תמחוק", "למחוק", "מחק רשומה", "תמחק רשומה", "תמחוק רשומה",
@@ -636,6 +663,26 @@ The JSON must be in this exact format:
                     print(f"[DEBUG DELETE] Returning delete confirmation: {response}")
                     self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
                     return {'response': response, 'requires_confirmation': True}
+            # --- Multi-turn: handle pending update content ---
+            if self.conversation_state and self.conversation_state.get('operation') == 'update_pending_content':
+                # The user's message is the new content for the update
+                current_note = self.conversation_state.get('current_note')
+                pending_note = self.conversation_state.get('pending_note', {})
+                pending_note['updates'] = text.strip()
+                # Prompt for confirmation
+                is_hebrew = language == 'he-IL'
+                response = (
+                    f"האם לעדכן את הרשומה '{current_note['title']}' עם התוכן הבא?\n{text.strip()}" if is_hebrew
+                    else f"Update the note '{current_note['title']}' with the following content?\n{text.strip()}"
+                )
+                self.conversation_state = {
+                    'operation': 'update',
+                    'pending_note': pending_note,
+                    'confirm_action': 'update',
+                    'current_note': current_note
+                }
+                self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                return {"operation": "update_confirm", "response": response, "requires_confirmation": True}
             # --- Existing confirmation state for update/delete ---
             if self.conversation_state:
                 print(f"[DEBUG NLP] In conversation state: {self.conversation_state}")

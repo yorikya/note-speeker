@@ -10,11 +10,18 @@ class LogService:
     def _get_log_file_path(self, log_filename):
         if platform == 'android':
             try:
-                from android.storage import primary_external_storage_path
-                base_dir = primary_external_storage_path()
-            except Exception:
-                base_dir = "/sdcard"
-            log_dir = os.path.join(base_dir, "note_speaker")
+                # Request permissions at runtime
+                from android.permissions import request_permissions, Permission
+                request_permissions([
+                    Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE
+                ])
+                # Use app-specific external storage directory
+                from android.storage import app_storage_path
+                base_dir = app_storage_path()  # /storage/emulated/0/Android/data/com.yorikya.notespeaker/files
+            except Exception as e:
+                print(f"[LOG] Android storage/permissions error: {e}")
+                base_dir = "/sdcard/note_speaker_fallback"
+            log_dir = base_dir
         else:
             log_dir = os.path.join(os.path.expanduser("~"), ".note_speaker")
         os.makedirs(log_dir, exist_ok=True)
@@ -25,5 +32,12 @@ class LogService:
         sys.stdout = log_file
         sys.stderr = log_file
         print(f"[LOG] Logging started. Log file: {self.log_file_path}")
+
+    def write_log_entry(self, message):
+        """
+        Write a log entry directly to the log file (useful for explicit logging).
+        """
+        with open(self.log_file_path, "a", encoding="utf-8") as f:
+            f.write(message + '\n')
 
 # Usage: from app.services.log_service import LogService; LogService() 

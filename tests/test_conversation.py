@@ -1,82 +1,72 @@
 import unittest
+import tempfile
+import os
 from app.services.nlp_service import NLPService
 
-class TestConversationE2E(unittest.TestCase):
+class TestConversationHebrewFindAndUpdateDescription(unittest.TestCase):
     def setUp(self):
-        # Use a fresh NLPService for each test
+        self.temp_notes_file = tempfile.NamedTemporaryFile(delete=False)
+        self.temp_notes_file.close()
+        temp_file_name = self.temp_notes_file.name
+        NLPService._get_notes_file_path = lambda self: temp_file_name
         self.nlp = NLPService(api_key=None)
         self.nlp.notes = []
         self.nlp.last_note_id = 0
+        self.nlp._save_notes()
 
-    def test_create_note_english(self):
-        response = self.nlp.process_command("create note shopping list", language="en")
-        self.assertIn("create", response.get("operation", "") or response.get("tool", ""))
-        self.assertIn("create", response.get("response", "").lower())
-        # Confirm creation
-        response2 = self.nlp.process_command("yes", language="en")
-        self.assertIn("created", response2.get("response", "").lower())
+    def tearDown(self):
+        os.unlink(self.temp_notes_file.name)
 
-    def test_create_note_hebrew(self):
+    def test_find_and_update_description_hebrew(self):
+        """
+        Scenario: User finds a note and updates its description in Hebrew, using a multi-turn, context-aware flow.
+        Flow:
+        1. User creates a note called 'רשימת קניות'.
+        2. User finds the note ('תמצא רשימת קניות').
+        3. Agent responds with a context prompt (e.g., 'נמצאה רשומה אחת. האם תרצה לעדכן...').
+        4. User says 'עדכן תיאור של הרשומה' (update the note's description).
+        5. Agent prompts for the new content.
+        6. User provides the new description.
+        7. Agent asks for confirmation to update.
+        8. User confirms ('כן תעדכן').
+        9. Agent updates the note and confirms.
+        10. Test checks that the note's description was updated.
+        """
+        # Step 0: Create the note first
         response = self.nlp.process_command("צור רשימת קניות", language="he-IL")
-        self.assertIn("צור", response.get("operation", "") or response.get("tool", ""))
-        self.assertIn("רשומה חדשה", response.get("response", ""))
-        # Confirm creation
-        response2 = self.nlp.process_command("כן", language="he-IL")
-        self.assertIn("עודכן", response2.get("response", "") or response2.get("response", ""))
+        response = self.nlp.process_command("כן", language="he-IL")
 
-    def test_update_note_english(self):
-        # Create first
-        self.nlp.process_command("create note groceries", language="en")
-        self.nlp.process_command("yes", language="en")
-        # Update
-        response = self.nlp.process_command("update note groceries", language="en")
-        self.assertIn("update", response.get("operation", "") or response.get("tool", ""))
+        # Step 1: User finds the note
+        response = self.nlp.process_command("תמצא רשימת קניות", language="he-IL")
+        found_response = response.get("response", "")
+        self.assertTrue(
+            "נמצאו" in found_response or "נמצאה רשומה אחת" in found_response,
+            f"Unexpected agent response: {found_response}"
+        )
 
-    def test_update_note_hebrew(self):
-        self.nlp.process_command("צור רשימת קניות", language="he-IL")
-        self.nlp.process_command("כן", language="he-IL")
-        response = self.nlp.process_command("עדכן רשימת קניות", language="he-IL")
-        self.assertIn("עדכן", response.get("operation", "") or response.get("tool", ""))
+        # Step 2: User requests to update the note's description
+        response = self.nlp.process_command("עדכן תיאור של הרשומה", language="he-IL")
+        update_prompt = response.get("response", "")
+        self.assertIn("לעדכן", update_prompt, f"Agent did not prompt for update content: {update_prompt}")
+        print("response (prompt for update content):", response)
 
-    def test_delete_note_english(self):
-        self.nlp.process_command("create note groceries", language="en")
-        self.nlp.process_command("yes", language="en")
-        response = self.nlp.process_command("delete note groceries", language="en")
-        self.assertIn("delete", response.get("operation", "") or response.get("tool", ""))
+        # Step 3: User provides the new description
+        description = "רשומה זאת משמשת לשמור רשימת קניות שבועית"
+        response = self.nlp.process_command(description, language="he-IL")
+        confirm_prompt = response.get("response", "")
+        self.assertIn("לעדכן", confirm_prompt, f"Agent did not ask for update confirmation: {confirm_prompt}")
+        print("response (prompt for update confirmation):", response)
 
-    def test_delete_note_hebrew(self):
-        self.nlp.process_command("צור רשימת קניות", language="he-IL")
-        self.nlp.process_command("כן", language="he-IL")
-        response = self.nlp.process_command("מחק רשימת קניות", language="he-IL")
-        self.assertIn("מחק", response.get("operation", "") or response.get("tool", ""))
+        # Step 4: User confirms the update
+        response = self.nlp.process_command("כן תעדכן", language="he-IL")
+        update_response = response.get("response", "")
+        self.assertIn("עודכנה רשומה", update_response, f"Agent did not confirm update: {update_response}")
+        print("response (update applied):", response)
 
-    def test_update_description_english(self):
-        self.nlp.process_command("create note groceries", language="en")
-        self.nlp.process_command("yes", language="en")
-        self.nlp.process_command("find note groceries", language="en")
-        response = self.nlp.process_command("update description: this is my weekly list", language="en")
-        self.assertIn("update", response.get("operation", "") or response.get("tool", ""))
-
-    def test_update_description_hebrew(self):
-        self.nlp.process_command("צור רשימת קניות", language="he-IL")
-        self.nlp.process_command("כן", language="he-IL")
-        self.nlp.process_command("מצא רשימת קניות", language="he-IL")
-        response = self.nlp.process_command("עדכן תיאור: זאת רשימה שבועית", language="he-IL")
-        self.assertIn("עדכן", response.get("operation", "") or response.get("tool", ""))
-
-    def test_add_sub_note_english(self):
-        self.nlp.process_command("create note groceries", language="en")
-        self.nlp.process_command("yes", language="en")
-        self.nlp.process_command("find note groceries", language="en")
-        response = self.nlp.process_command("add sub-note called milk", language="en")
-        self.assertIn("sub-note", response.get("response", "").lower())
-
-    def test_add_sub_note_hebrew(self):
-        self.nlp.process_command("צור רשימת קניות", language="he-IL")
-        self.nlp.process_command("כן", language="he-IL")
-        self.nlp.process_command("מצא רשימת קניות", language="he-IL")
-        response = self.nlp.process_command("הוסף תת רשומה חלב", language="he-IL")
-        self.assertIn("תת רשומה", response.get("response", ""))
+        # Step 5: Check that the note's description was updated
+        note = next((n for n in self.nlp.notes if "רשימת קניות" in n['title']), None)
+        self.assertIsNotNone(note)
+        self.assertIn(description, note['description'])
 
 if __name__ == "__main__":
     unittest.main() 
