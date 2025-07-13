@@ -21,6 +21,10 @@ from app.screens import MainScreen, SettingsScreen, NotesScreen, HelpScreen
 from app.services import SpeechService, ConfigService
 from app.services.nlp_service import NLPService
 from app.services.log_service import LogService
+from kivy.uix.popup import Popup
+from kivy.uix.label import Label
+import sys
+import traceback
 
 # Kivy requires minimum version
 kivy.require('2.0.0')
@@ -75,6 +79,23 @@ def register_hebrew_fonts():
         return False
 
 
+def show_error_popup(error_text):
+    popup = Popup(title='App Error',
+                  content=Label(text=error_text, font_size='16sp'),
+                  size_hint=(0.9, 0.5))
+    popup.open()
+
+def global_exception_hook(exctype, value, tb):
+    error_message = ''.join(traceback.format_exception(exctype, value, tb))
+    print(error_message)
+    from kivy.clock import Clock
+    Clock.schedule_once(lambda dt: show_error_popup(error_message), 0)
+    # Call the default excepthook too
+    sys.__excepthook__(exctype, value, tb)
+
+sys.excepthook = global_exception_hook
+
+
 class NoteSpeakerApp(MDApp):
     def __init__(self):
         super().__init__()
@@ -86,13 +107,7 @@ class NoteSpeakerApp(MDApp):
         self.speech_service = SpeechService(self.config_service)
         
         # Get API key from config or environment
-        api_key = self.config_service.get('gemini_api_key', None)
-        if not api_key:
-            import os
-            api_key = os.getenv('GEMINI_API_KEY')
-            if api_key:
-                self.config_service.set('gemini_api_key', api_key)
-                self.config_service.save_config()
+        api_key = self.get_gemini_api_key()
         
         self.nlp_service = NLPService(api_key=api_key)
         
@@ -107,6 +122,17 @@ class NoteSpeakerApp(MDApp):
         Window.size = (1200, 800)
         Window.minimum_width = 800
         Window.minimum_height = 600
+
+    def get_gemini_api_key(self):
+        """Get API key from config or environment and save to config if found in env."""
+        api_key = self.config_service.get('gemini_api_key', None)
+        if not api_key:
+            import os
+            api_key = os.getenv('GEMINI_API_KEY')
+            if api_key:
+                self.config_service.set('gemini_api_key', api_key)
+                self.config_service.save_config()
+        return api_key
 
     def build(self):
         # Register Hebrew fonts first and store result

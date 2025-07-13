@@ -32,18 +32,18 @@ pip install pyaudio
 
 ---
 
-## Example: Task Tree for [Fiat Tipo]
+## Example: Task Tree for [Fiat Tipo (car maintenance tasks)]
 
 Below is a prettified example of how notes can be structured as a tree, using your attached `notes.md` as a reference:
 
 ```
-[Fit Tipo]
+[Fiat Tipo]
 ├── [Make yearly test]
 │   ├── [Fix steering]
-│   │   └── [Send repair]
+│   │   └── [Send to repair]
 │   └── [Fix AirBox]
 │       ├── [Buy Airbox]
-│       └── [Create buckets]
+│       └── [Create brackets]
 │           └── [Buy iron plate 2mm]
 └── [Change Oil]
     └── [Buy oil from: ...]
@@ -110,11 +110,11 @@ If you want to sync notes across devices or add collaboration, you might conside
 
 ## Next Steps
 
-- Define the data model for notes and relations, including the 'done' and 'done_date' fields.
-- Choose the Python mobile framework (Kivy or BeeWare).
-- Implement core features: speech-to-text, note creation, tree navigation, search, summarization, and marking notes as done.
-- Design a simple, touch-friendly UI.
-- Prepare for APK packaging and Android deployment.
+- [done] Define the data model for notes and relations, including the 'done' and 'done_date' fields.
+- [done] Choose the Python mobile framework (Kivy or BeeWare).
+- [done] Implement core features: speech-to-text, note creation, tree navigation, search, summarization, and marking notes as done.
+- [done] Design a simple, touch-friendly UI.
+- [done] Prepare for APK packaging and Android deployment.
 
 ---
 
@@ -134,7 +134,7 @@ Stage I
 1. Build basic shell application in Python which compiles to APK package [flow readme instruction]
 2. In the shell application build chat application with user text input and show history conversation with AI agent. [consider to use web framework to simplefy things, maybe some other framework]
 3. Add to the chat microphone option that when a user press it start recording voice till silence for 4 seconds. Threshold for the maximum length of for recording is 5 minutes [it's intend shouldn't be long, because a user should concise about he is instructions]
-4. In the first stage application will support hebrew language only, but in the future we would add an English support.
+4. In the first stage application will support hebrew language or english
 5. The record from user would be process via LLM in order to handle users notes
 6. User will have predefined command such as im additional to the natural language capabilities:
   * Create note
@@ -389,7 +389,7 @@ A voice-controlled note-taking application with natural language processing capa
 
 ## Usage
 
-1. Click the microphone button to start recording
+1. Click the "Record" button to start recording
 2. Speak your note or command
 3. The application will process your speech and:
    - Create new notes
@@ -470,3 +470,27 @@ If you need extra system packages, you can create a custom Dockerfile based on t
 ---
 
 This approach gives you a portable, repeatable build environment and avoids most platform-specific issues.
+
+## Example: Conversational Command Understanding Flow
+
+Below is an example of how the new conversational command understanding logic works:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant NLP/Intent Model
+
+    User->>App: (Speaks freely)
+    App->>App: Accumulate speech
+    App->>NLP/Intent Model: Is command complete?
+    NLP/Intent Model-->>App: Not yet / Need more info
+    App->>User: (Prompt for clarification)
+    User->>App: (Provides more info)
+    App->>NLP/Intent Model: Is command complete?
+    NLP/Intent Model-->>App: Yes, intent detected
+    App->>NLP/Intent Model: Summarize & parse command
+    NLP/Intent Model-->>App: Command + parameters
+    App->>App: Execute command
+    App->>User: (Show result)
+```
