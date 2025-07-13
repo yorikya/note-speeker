@@ -28,16 +28,26 @@ class LogService:
         return os.path.join(log_dir, log_filename)
 
     def _redirect_stdout_stderr(self):
-        log_file = open(self.log_file_path, "a", buffering=1, encoding="utf-8")
-        sys.stdout = log_file
-        sys.stderr = log_file
-        print(f"[LOG] Logging started. Log file: {self.log_file_path}")
+        try:
+            log_file = open(self.log_file_path, "a", buffering=1, encoding="utf-8")
+            sys.stdout = log_file
+            sys.stderr = log_file
+            print(f"[LOG] Logging started. Log file: {self.log_file_path}")
+        except Exception as e:
+            # Print error to logcat and continue without crashing
+            import traceback
+            print(f"[LOG ERROR] Could not open log file: {e}\n{traceback.format_exc()}")
 
     def write_log_entry(self, message):
         """
         Write a log entry directly to the log file (useful for explicit logging).
+        If writing fails (e.g., due to permissions), print the error but do not crash.
         """
-        with open(self.log_file_path, "a", encoding="utf-8") as f:
-            f.write(message + '\n')
+        try:
+            with open(self.log_file_path, "a", encoding="utf-8") as f:
+                f.write(message + '\n')
+        except Exception as e:
+            import traceback
+            print(f"[LOG ERROR] Could not write log entry: {e}\n{traceback.format_exc()}")
 
 # Usage: from app.services.log_service import LogService; LogService() 

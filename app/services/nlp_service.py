@@ -663,11 +663,112 @@ The JSON must be in this exact format:
                     print(f"[DEBUG DELETE] Returning delete confirmation: {response}")
                     self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
                     return {'response': response, 'requires_confirmation': True}
+            # --- Existing confirmation state for update/delete ---
+            if self.conversation_state and self.conversation_state.get('operation') == 'update':
+                print(f"[DEBUG NLP] In update confirmation state: {self.conversation_state}")
+                is_hebrew = language == 'he-IL'
+                pending_action = 'update'
+                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
+                print(f"[DEBUG NLP] ConfirmationIntentTool result: {intent_result}")
+                print(f"[DEBUG NLP] Operation: update")
+                print(f"[DEBUG NLP] Pending note: {self.conversation_state.get('pending_note')}")
+                is_yes = intent_result['intent'] == 'yes'
+                is_no = intent_result['intent'] == 'no'
+                if is_yes:
+                    print("[DEBUG NLP] User confirmed update.")
+                    pending_note = self.conversation_state.get("pending_note")
+                    pending_note["requires_confirmation"] = False
+                    if 'nlp_service' not in pending_note:
+                        pending_note['nlp_service'] = self
+                    tool = self.tools.get('update')
+                    if tool:
+                        result = tool.run(pending_note)
+                        result["notes_updated"] = True
+                    else:
+                        result = {"response": "Error: Update tool not found."}
+                    self.conversation_state = None
+                    print(f"[DEBUG NLP] Returning result after update confirmation: {result}")
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+                elif is_no:
+                    print("[DEBUG NLP] User denied update.")
+                    self.conversation_state = None
+                    result = {
+                        "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
+                    }
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+                else:
+                    # Ambiguous: prompt again for confirmation
+                    current_note = self.conversation_state.get('current_note')
+                    updates = self.conversation_state.get('pending_note', {}).get('updates', '')
+                    response = (
+                        f"אנא אשר או בטל: לעדכן את הרשומה '{current_note['title']}' עם התוכן הבא?\n{updates}" if is_hebrew
+                        else f"Please confirm or cancel: update the note '{current_note['title']}' with the following content?\n{updates}"
+                    )
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "update_confirm", "response": response, "requires_confirmation": True}
+            # --- Confirmation state for delete ---
+            if self.conversation_state and self.conversation_state.get('operation') == 'delete':
+                print(f"[DEBUG NLP] In delete confirmation state: {self.conversation_state}")
+                is_hebrew = language == 'he-IL'
+                pending_action = 'delete'
+                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
+                print(f"[DEBUG NLP] ConfirmationIntentTool result: {intent_result}")
+                print(f"[DEBUG NLP] Operation: delete")
+                print(f"[DEBUG NLP] Pending note: {self.conversation_state.get('pending_note')}")
+                is_yes = intent_result['intent'] == 'yes'
+                is_no = intent_result['intent'] == 'no'
+                if is_yes:
+                    print("[DEBUG NLP] User confirmed delete.")
+                    pending_note = self.conversation_state.get("pending_note")
+                    pending_note["requires_confirmation"] = False
+                    if 'nlp_service' not in pending_note:
+                        pending_note['nlp_service'] = self
+                    tool = self.tools.get('delete')
+                    if tool:
+                        result = tool.run(pending_note)
+                    else:
+                        result = {"response": "Error: Delete tool not found.", "operation": "delete"}
+                    self.conversation_state = None
+                    print(f"[DEBUG NLP] Returning result after delete confirmation: {result}")
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+                elif is_no:
+                    print("[DEBUG NLP] User denied delete.")
+                    self.conversation_state = None
+                    result = {
+                        "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action.",
+                        "operation": "delete_cancel"
+                    }
+                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
+                    return result
+                else:
+                    # Ambiguous: prompt again for confirmation
+                    current_note = self.conversation_state.get('current_note')
+                    response = (
+                        f"אנא אשר או בטל: למחוק את הרשומה '{current_note['title']}'?" if is_hebrew
+                        else f"Please confirm or cancel: delete the note '{current_note['title']}'?"
+                    )
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "delete_confirm", "response": response, "requires_confirmation": True}
             # --- Multi-turn: handle pending update content ---
             if self.conversation_state and self.conversation_state.get('operation') == 'update_pending_content':
                 # The user's message is the new content for the update
                 current_note = self.conversation_state.get('current_note')
                 pending_note = self.conversation_state.get('pending_note', {})
+                # Check if the user input is a confirmation/denial (should not be treated as content)
+                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': 'update'})
+                if intent_result['intent'] in ('yes', 'no'):
+                    # User said 'yes' or 'no' instead of providing content
+                    is_hebrew = language == 'he-IL'
+                    response = (
+                        "אנא אמור את התוכן החדש לעדכון הרשומה." if is_hebrew
+                        else "Please provide the new content to update the note."
+                    )
+                    self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
+                    return {"operation": "update_ask_content", "response": response, "requires_confirmation": False}
+                # Otherwise, treat as new content
                 pending_note['updates'] = text.strip()
                 # Prompt for confirmation
                 is_hebrew = language == 'he-IL'
@@ -683,42 +784,6 @@ The JSON must be in this exact format:
                 }
                 self.conversation_history.append({'role': 'agent', 'text': response, 'language': language})
                 return {"operation": "update_confirm", "response": response, "requires_confirmation": True}
-            # --- Existing confirmation state for update/delete ---
-            if self.conversation_state:
-                print(f"[DEBUG NLP] In conversation state: {self.conversation_state}")
-                is_hebrew = language == 'he-IL'
-                # Use ConfirmationIntentTool
-                pending_action = self.conversation_state.get('operation') if self.conversation_state else None
-                intent_result = self.tools['confirmation_intent'].run({'text': text, 'language': language, 'pending_action': pending_action})
-                print(f"[DEBUG NLP] ConfirmationIntentTool result: {intent_result}")
-                is_yes = intent_result['intent'] == 'yes'
-                if is_yes:
-                    print("[DEBUG NLP] User confirmed.")
-                    operation = self.conversation_state.get("operation")
-                    pending_note = self.conversation_state.get("pending_note")
-                    pending_note["requires_confirmation"] = False
-                    # Ensure nlp_service is present for all operations
-                    if 'nlp_service' not in pending_note:
-                        pending_note['nlp_service'] = self
-                    print(f"[DEBUG NLP] pending_note before tool call: {pending_note}")
-                    tool = self.tools.get(operation)
-                    if tool:
-                        result = tool.run(pending_note)
-                        result["notes_updated"] = True
-                    else:
-                        result = {"response": "Error: Tool not found."}
-                    self.conversation_state = None
-                    print(f"[DEBUG NLP] Returning result after confirmation: {result}")
-                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
-                    return result
-                else:
-                    print("[DEBUG NLP] User denied.")
-                    self.conversation_state = None
-                    result = {
-                        "response": "בסדר, ביטלתי את הפעולה." if is_hebrew else "OK, I've cancelled the action."
-                    }
-                    self.conversation_history.append({'role': 'agent', 'text': result['response'], 'language': language})
-                    return result
             # --- Find command: update context if single note found ---
             response = self.tools['find'].run({'query': text, 'nlp_service': self})
             matches = response.get('matches', [])
