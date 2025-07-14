@@ -37,7 +37,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi
+requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi==0.4.2
 pip_options = --no-binary :all:
 
 # (str) Custom source folders for requirements
@@ -331,7 +331,7 @@ android.allow_backup = True
 #p4a.source_dir =
 
 # (str) The directory in which python-for-android should look for your own build recipes (if any)
-#p4a.local_recipes =
+p4a.local_recipes = ./recipes
 
 # (str) Filename to the hook for p4a
 #p4a.hook =
