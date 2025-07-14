@@ -37,7 +37,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi==0.4.2
+requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi==0.4.2,gtts==2.5.4
 pip_options = --no-binary :all:
 
 # (str) Custom source folders for requirements
