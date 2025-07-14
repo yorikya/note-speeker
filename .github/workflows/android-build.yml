@@ -40,8 +40,4 @@ jobs:
 
       - name: Remove rogue bidi.so
         run: |
-          find . -name 'bidi.so' -delete || true
-
-      - name: List installed packages and files
-        run: |
-          docker run --rm --entrypoint /bin/bash -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -c "pip show -f python-bidi" 
+          find . -name 'bidi.so' -delete || true 
