@@ -33,3 +33,19 @@ jobs:
         with:
           name: apk
           path: bin/*.apk 
+
+      - name: Show pip install log for python-bidi
+        run: |
+          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest pip install --no-binary :all: -v python-bidi
+
+      - name: Search for bidi.so in build output
+        run: |
+          find . -name 'bidi.so' || true
+
+      - name: Remove rogue bidi.so
+        run: |
+          find . -name 'bidi.so' -delete || true
+
+      - name: List installed packages and files
+        run: |
+          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest pip show -f python-bidi 
