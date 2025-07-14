@@ -24,16 +24,6 @@ jobs:
       - name: Fix permissions for build
         run: sudo chown -R 1000:1000 .
 
-      - name: Cache buildozer and gradle
-        uses: actions/cache@v3
-        with:
-          path: |
-            .buildozer
-            .gradle
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('**/buildozer.spec') }}
-          restore-keys: |
-            ${{ runner.os }}-buildozer-
-
       - name: Build APK with Buildozer
         run: |
           docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -v android debug
