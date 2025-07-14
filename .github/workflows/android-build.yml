@@ -36,7 +36,7 @@ jobs:
 
       - name: Show pip install log for python-bidi
         run: |
-          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest /bin/bash -c "pip install --no-binary :all: -v python-bidi"
+          docker run --rm --entrypoint /bin/bash -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -c "pip install --no-binary :all: -v python-bidi"
 
       - name: Search for bidi.so in build output
         run: |
@@ -48,4 +48,4 @@ jobs:
 
       - name: List installed packages and files
         run: |
-          docker run --rm -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest /bin/bash -c "pip show -f python-bidi" 
+          docker run --rm --entrypoint /bin/bash -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -c "pip show -f python-bidi" 
