@@ -34,10 +34,6 @@ jobs:
           name: apk
           path: bin/*.apk 
 
-      - name: Show pip install log for python-bidi
-        run: |
-          docker run --rm --entrypoint /bin/bash -v "$PWD":/src -w /src ghcr.io/kivy/buildozer:latest -c "pip install --no-binary :all: -v python-bidi"
-
       - name: Search for bidi.so in build output
         run: |
           find . -name 'bidi.so' || true
