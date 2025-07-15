@@ -1,4 +1,4 @@
-# Dummy grpc package to satisfy imports on Android
+print("Dummy grpc package loaded")
 
 class StatusCode:
     OK = 0
@@ -29,4 +29,11 @@ class FutureTimeoutError(Exception):
     pass
 
 class UnaryUnaryClientInterceptor:
-    pass 
+    pass
+
+import sys
+sys.modules['grpc'].StatusCode = StatusCode
+sys.modules['grpc'].RpcError = RpcError
+sys.modules['grpc'].AioRpcError = AioRpcError
+sys.modules['grpc'].FutureTimeoutError = FutureTimeoutError
+sys.modules['grpc'].UnaryUnaryClientInterceptor = UnaryUnaryClientInterceptor 
