@@ -1,4 +1,4 @@
-# Dummy grpc module to satisfy imports on Android
+# Dummy grpc package to satisfy imports on Android
 
 class StatusCode:
     OK = 0

@@ -12,10 +12,13 @@ class GrpcioRecipe(PythonRecipe):
         pass
 
     def build_arch(self, arch):
-        # Copy the dummy grpc.py to the site-packages directory
-        dummy_grpc = os.path.join(self.get_recipe_dir(), 'grpc.py')
-        target_dir = os.path.join(self.ctx.get_python_install_dir(arch.arch), 'site-packages')
+        # Copy the dummy grpc package to the site-packages directory
+        dummy_grpc_dir = os.path.join(self.get_recipe_dir(), 'grpc')
+        target_dir = os.path.join(self.ctx.get_python_install_dir(arch.arch), 'site-packages', 'grpc')
         os.makedirs(target_dir, exist_ok=True)
-        shutil.copyfile(dummy_grpc, os.path.join(target_dir, 'grpc.py'))
+        for filename in os.listdir(dummy_grpc_dir):
+            src_file = os.path.join(dummy_grpc_dir, filename)
+            dst_file = os.path.join(target_dir, filename)
+            shutil.copyfile(src_file, dst_file)
 
 recipe = GrpcioRecipe() 
