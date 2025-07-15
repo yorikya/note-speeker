@@ -15,9 +15,49 @@ from kivy.config import Config
 import os
 import sys
 import types
+
+class StatusCode:
+    OK = 0
+    CANCELLED = 1
+    UNKNOWN = 2
+    INVALID_ARGUMENT = 3
+    DEADLINE_EXCEEDED = 4
+    NOT_FOUND = 5
+    ALREADY_EXISTS = 6
+    PERMISSION_DENIED = 7
+    RESOURCE_EXHAUSTED = 8
+    FAILED_PRECONDITION = 9
+    ABORTED = 10
+    OUT_OF_RANGE = 11
+    UNIMPLEMENTED = 12
+    INTERNAL = 13
+    UNAVAILABLE = 14
+    DATA_LOSS = 15
+    UNAUTHENTICATED = 16
+
+class RpcError(Exception):
+    pass
+
+class AioRpcError(Exception):
+    pass
+
+class FutureTimeoutError(Exception):
+    pass
+
+class UnaryUnaryClientInterceptor:
+    pass
+
+grpc = types.ModuleType('grpc')
+grpc.StatusCode = StatusCode
+grpc.RpcError = RpcError
+grpc.AioRpcError = AioRpcError
+grpc.FutureTimeoutError = FutureTimeoutError
+grpc.UnaryUnaryClientInterceptor = UnaryUnaryClientInterceptor
+
+sys.modules['grpc'] = grpc
+print("Patched sys.modules['grpc'] at runtime")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.modules['grpc'] = types.ModuleType('grpc')
-os.environ["KIVY_LOG_DIR"] = "/sdcard/"
 
 # Import our custom modules
 from app.widgets import SideMenu
