@@ -13,6 +13,10 @@ from kivymd.app import MDApp
 from kivymd.theming import ThemeManager
 from kivy.config import Config
 import os
+import sys
+import types
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.modules['grpc'] = types.ModuleType('grpc')
 os.environ["KIVY_LOG_DIR"] = "/sdcard/"
 
 # Import our custom modules
@@ -23,9 +27,6 @@ from app.services.nlp_service import NLPService
 from app.services.log_service import LogService
 from kivy.uix.popup import Popup
 from kivy.uix.label import Label
-import sys
-import types
-sys.modules['grpc'] = types.ModuleType('grpc')
 import traceback
 
 # Kivy requires minimum version
