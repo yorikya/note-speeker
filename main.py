@@ -15,8 +15,9 @@ from kivy.config import Config
 import os
 import sys
 import types
+import enum
 
-class StatusCode:
+class StatusCode(enum.Enum):
     OK = 0
     CANCELLED = 1
     UNKNOWN = 2
@@ -55,7 +56,7 @@ grpc.FutureTimeoutError = FutureTimeoutError
 grpc.UnaryUnaryClientInterceptor = UnaryUnaryClientInterceptor
 
 sys.modules['grpc'] = grpc
-print("Patched sys.modules['grpc'] at runtime")
+print("Patched sys.modules['grpc'] at runtime with enum.StatusCode")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
