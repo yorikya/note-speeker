@@ -1,5 +1,6 @@
 from pythonforandroid.recipe import PythonRecipe
 import os
+import shutil
 
 class GrpcioRecipe(PythonRecipe):
     version = '1.48.2'
@@ -14,6 +15,6 @@ class GrpcioRecipe(PythonRecipe):
         # Copy the dummy grpc.py to the site-packages directory
         dummy_grpc = os.path.join(self.get_recipe_dir(), 'grpc.py')
         target_dir = os.path.join(self.ctx.get_python_install_dir(arch.arch), 'site-packages')
-        self.ctx.copy_file(dummy_grpc, os.path.join(target_dir, 'grpc.py'))
+        shutil.copyfile(dummy_grpc, os.path.join(target_dir, 'grpc.py'))
 
 recipe = GrpcioRecipe() 
