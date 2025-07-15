@@ -17,7 +17,19 @@ import sys
 import types
 import enum
 
-class StatusCode(enum.Enum):
+class SubscriptableEnumMeta(enum.EnumMeta):
+    def __getitem__(cls, key):
+        if isinstance(key, int):
+            for member in cls:
+                if member.value == key:
+                    return member
+            raise KeyError(key)
+        elif isinstance(key, str):
+            return cls.__members__[key]
+        else:
+            raise KeyError(key)
+
+class StatusCode(enum.Enum, metaclass=SubscriptableEnumMeta):
     OK = 0
     CANCELLED = 1
     UNKNOWN = 2
@@ -35,18 +47,6 @@ class StatusCode(enum.Enum):
     UNAVAILABLE = 14
     DATA_LOSS = 15
     UNAUTHENTICATED = 16
-
-    @classmethod
-    def __getitem__(cls, key):
-        if isinstance(key, int):
-            for member in cls:
-                if member.value == key:
-                    return member
-            raise KeyError(key)
-        elif isinstance(key, str):
-            return cls.__members__[key]
-        else:
-            raise KeyError(key)
 
 class RpcError(Exception):
     pass
@@ -68,7 +68,7 @@ grpc.FutureTimeoutError = FutureTimeoutError
 grpc.UnaryUnaryClientInterceptor = UnaryUnaryClientInterceptor
 
 sys.modules['grpc'] = grpc
-print("Patched sys.modules['grpc'] at runtime with enum.StatusCode supporting subscripting")
+print("Patched sys.modules['grpc'] at runtime with subscriptable enum.StatusCode (EnumMeta)")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
