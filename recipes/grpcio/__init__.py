@@ -15,6 +15,7 @@ class GrpcioRecipe(PythonRecipe):
         # Copy the dummy grpc.py to the site-packages directory
         dummy_grpc = os.path.join(self.get_recipe_dir(), 'grpc.py')
         target_dir = os.path.join(self.ctx.get_python_install_dir(arch.arch), 'site-packages')
+        os.makedirs(target_dir, exist_ok=True)
         shutil.copyfile(dummy_grpc, os.path.join(target_dir, 'grpc.py'))
 
 recipe = GrpcioRecipe() 
