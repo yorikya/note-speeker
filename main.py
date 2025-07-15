@@ -24,6 +24,8 @@ from app.services.log_service import LogService
 from kivy.uix.popup import Popup
 from kivy.uix.label import Label
 import sys
+import types
+sys.modules['grpc'] = types.ModuleType('grpc')
 import traceback
 
 # Kivy requires minimum version
