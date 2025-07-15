@@ -37,7 +37,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition==3.14.3,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi==0.4.2,gtts==2.5.4,google-api-python-client==2.127.0,google-auth==2.29.0,google-auth-httplib2==0.2.0,google-auth-oauthlib==1.2.0,requests==2.32.3,click==8.1.7,google-generativeai==0.5.4,typing_extensions==4.12.2,google-ai-generativelanguage==0.6.18,protobuf==4.25.3,googleapis-common-protos==1.63.0,google-cloud-core==2.4.1,google-api-core==2.18.0
+requirements = python3,kivy==2.3.0,kivymd==1.1.1,speechrecognition==3.14.3,https://github.com/kivy/pyjnius/archive/master.zip,arabic_reshaper,python-bidi==0.4.2,gtts==2.5.4,google-api-python-client==2.127.0,google-auth==2.29.0,google-auth-httplib2==0.2.0,google-auth-oauthlib==1.2.0,requests==2.32.3,click==8.1.7,google-generativeai==0.5.4,typing_extensions==4.12.2,google-ai-generativelanguage==0.6.18,protobuf==4.25.3,googleapis-common-protos==1.63.0,google-cloud-core==2.4.1,google-api-core==2.18.0,grpcio==1.48.2
 pip_options = --no-binary :all:
 
 # (str) Custom source folders for requirements
